@@ -2,6 +2,9 @@
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
+library(doParallel)       # For parrallel optimization
+library(rgl)              # Library to load 3D trade graphs
+library(reshape2)         # Library to load 3D trade graphs
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
@@ -14,8 +17,8 @@ csvDir       <- "C:/Users/RJK/Documents/SpiderOak Hive/Financial/commodities_dat
 xtsDates     <- "2006/"      # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast = 20
-MAslow = 200
+MAfast = seq(5, 100, by = 5)        #fast moving average period
+MAslow = seq(10, 200, by = 10)      #slow moving average period
 
 # Strategy Functions
 
@@ -39,6 +42,7 @@ for (sym in symbol){
 }
 
 # if run previously, run this code from here down
+delete.paramset(portfolio.st,"DMA_OPT")
 rm.strat(portfolio.st)
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
@@ -135,27 +139,62 @@ add.rule(strat, 'rulePctEquity',
          type='rebalance',
          label='rebalance')
 
+add.distribution(portfolio.st,
+                 paramset.label = "DMA_OPT",
+                 component.type = "indicator",
+                 component.label = "nFast",
+                 variable = list( n = MAfast ),
+                 label = "ma_fast"
+)
 
-out <- applyStrategy.rebalancing(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
-updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio
-updateAcct(name = account.st)
-updateEndEq(account.st)
+add.distribution(portfolio.st,
+                 paramset.label = "DMA_OPT",
+                 component.type = "indicator",
+                 component.label = "nSlow",
+                 variable = list( n = MAslow ),
+                 label = "ma_slow"
+)
 
-# Plot the charts fo each symbol
+add.distribution.constraint(portfolio.st,
+                            paramset.label = "DMA_OPT",
+                            distribution.label.1 = "ma_fast",
+                            distribution.label.2 = "ma_slow",
+                            operator = "<",
+                            label = "fastLTslow")
+
+registerDoParallel(cores=detectCores())
+out <- apply.paramset(strat, paramset.label = "DMA_OPT",
+                      portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
+stats <- out$tradeStats
+wd <- getwd()
+csv_file <- paste(wd,"closesd",bbClose,".csv", sep="")
+out <- write.csv(stats,             # write to file
+                 file = csv_file,
+                 quote = FALSE, row.names = TRUE)
+
+# A loop to investigate the parameters via a 3D graph
 for (sym in symbol){
-  chart.Posn(Portfolio = portfolio.st, Symbol = sym, 
-             TA=list("add_SMA(n=20)","add_SMA(n=200)"),
-             Dates = "1995-01::2017-01") # Chart the position 
+  dfName <- paste(sym,"stats", sep = "")
+  statSubsetDf <- subset(stats, Symbol == sym)
+  assign(dfName, statSubsetDf)
+  tradeGraphs(stats = statSubsetDf, 
+              free.params=c("bb_break","ma_b"),
+              statistics = c("Ann.Sharpe","Profit.To.Max.Draw","Min.Equity"), 
+              title = sym)
 }
-stats <- tradeStats(portfolio.st)
 
-#plot the returns vs buy and hold
-eq1 <- getAccount(account.st)$summary$End.Eq
-rt1 <- Return.calculate(eq1,"log")
-rt2 <- periodReturn(GSPC, period = "daily")
-returns <- cbind(rt1,rt2)
-colnames(returns) <- c("BB","SP500")
-chart.CumReturns(returns,colorset=c(2,4),legend.loc="topleft",
-                 main="BBand to Benchmark Comparison",ylab="cum return",xlab="",
-                 minor.ticks=FALSE)
+# Or use a heatmap to look at one parameter at a time
+for (sym in symbol){
+  dfName <- paste(sym,"stats", sep = "")
+  statSubsetDf <- subset(stats, Symbol == sym)
+  assign(dfName, statSubsetDf)
+  z <- tapply(X=statSubsetDf$Ann.Sharpe, 
+              INDEX = list(statSubsetDf$bb_break,statSubsetDf$ma_b), 
+              FUN = median)
+  x <- as.numeric(rownames(z))
+  y <- as.numeric(colnames(z))
+  filled.contour(x=x,y=y,z=z,color=heat.colors,xlab="bbreak",ylab="MA")
+  title(sym)
+}
+
 Sys.setenv(TZ=ttz)                                             # Return to original time zone
