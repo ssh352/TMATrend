@@ -26,7 +26,7 @@ MAslow = seq(10, 200, by = 10)      #slow moving average period
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
 currency('USD')                          # set USD as a base currency
-symbol <- c("LSU","RR","CO","NG","OJ")   # Universe selection
+symbol <- c("LSU","RR","CO","NG","OJ","LB")   # Universe selection
 
 for (sym in symbol){
   future(sym, currency = "USD", multiplier = 1)
@@ -167,7 +167,7 @@ out <- apply.paramset(strat, paramset.label = "DMA_OPT",
                       portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
 stats <- out$tradeStats
 wd <- getwd()
-csv_file <- paste(wd,"closesd",bbClose,".csv", sep="")
+csv_file <- paste(wd,"DMAopt",".csv", sep="")
 out <- write.csv(stats,             # write to file
                  file = csv_file,
                  quote = FALSE, row.names = TRUE)
@@ -178,7 +178,7 @@ for (sym in symbol){
   statSubsetDf <- subset(stats, Symbol == sym)
   assign(dfName, statSubsetDf)
   tradeGraphs(stats = statSubsetDf, 
-              free.params=c("bb_break","ma_b"),
+              free.params=c("ma_fast","ma_slow"),
               statistics = c("Ann.Sharpe","Profit.To.Max.Draw","Min.Equity"), 
               title = sym)
 }
@@ -189,11 +189,11 @@ for (sym in symbol){
   statSubsetDf <- subset(stats, Symbol == sym)
   assign(dfName, statSubsetDf)
   z <- tapply(X=statSubsetDf$Ann.Sharpe, 
-              INDEX = list(statSubsetDf$bb_break,statSubsetDf$ma_b), 
+              INDEX = list(statSubsetDf$ma_fast,statSubsetDf$ma_slow), 
               FUN = median)
   x <- as.numeric(rownames(z))
   y <- as.numeric(colnames(z))
-  filled.contour(x=x,y=y,z=z,color=heat.colors,xlab="bbreak",ylab="MA")
+  filled.contour(x=x,y=y,z=z,color=heat.colors,xlab="ma_fast",ylab="ma_slow")
   title(sym)
 }
 

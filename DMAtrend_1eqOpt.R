@@ -6,6 +6,9 @@
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
+library(doParallel)       # For parrallel optimization
+library(rgl)              # Library to load 3D trade graphs
+library(reshape2)         # Library to load 3D trade graphs
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
@@ -16,8 +19,8 @@ account.st   <- "DMA1EQ"       # Account name
 initEq       <- 10000          # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast = 20
-MAslow = 200
+MAfast = seq(5, 200, by = 5)        #fast moving average period
+MAslow = seq(10, 400, by = 10)      #slow moving average period
 
 # Strategy Functions
 
@@ -126,27 +129,61 @@ add.rule(strat, 'rulePctEquity',
          type='rebalance',
          label='rebalance')
 
+# Add distributions and constraints
+add.distribution(portfolio.st,
+                 paramset.label = "DMA_OPT",
+                 component.type = "indicator",
+                 component.label = "nFast",
+                 variable = list( n = MAfast ),
+                 label = "ma_fast"
+)
 
-out <- applyStrategy.rebalancing(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
-updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio
-updateAcct(name = account.st)
-updateEndEq(account.st)
+add.distribution(portfolio.st,
+                 paramset.label = "DMA_OPT",
+                 component.type = "indicator",
+                 component.label = "nSlow",
+                 variable = list( n = MAslow ),
+                 label = "ma_slow"
+)
 
-#chart the position
-chart.Posn(Portfolio = portfolio.st, Symbol = symbol, 
-           TA=list("add_SMA(n=10)","add_SMA(n=100)"), 
-           Dates = "1996-01::2016-12")          # Chart the position
-stats <- tradeStats(portfolio.st)
-OB <- get.orderbook(portfolio.st)
-orders <- OB$DMA1EQ$GSPC
+add.distribution.constraint(portfolio.st,
+                            paramset.label = "DMA_OPT",
+                            distribution.label.1 = "ma_fast",
+                            distribution.label.2 = "ma_slow",
+                            operator = "<",
+                            label = "fastLTslow")
 
-#plot the returns vs buy and hold
-eq1 <- getAccount(account.st)$summary$End.Eq
-rt1 <- Return.calculate(eq1,"log")
-rt2 <- periodReturn(GSPC, period = "daily")
-returns <- cbind(rt1,rt2)
-colnames(returns) <- c("DMA","SP500")
-chart.CumReturns(returns,colorset=c(2,4),legend.loc="topleft",
-                 main="Simple Dual Moving Average to Benchmark Comparison",ylab="cum return",xlab="",
-                 minor.ticks=FALSE)
+# Register the cores for parralel procssing
+registerDoParallel(cores=detectCores())
+
+# Now apply the parameter sets for optimization
+out <- apply.paramset(strat, paramset.label = "DMA_OPT",
+                      portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
+stats <- out$tradeStats
+
+# A loop to investigate the parameters via a 3D graph
+for (sym in symbol){
+  dfName <- paste(sym,"stats", sep = "")
+  statSubsetDf <- subset(stats, Symbol == sym)
+  assign(dfName, statSubsetDf)
+  tradeGraphs(stats = statSubsetDf, 
+              free.params=c("ma_fast","ma_slow"),
+              statistics = c("Ann.Sharpe","Profit.To.Max.Draw","Min.Equity"), 
+              title = sym)
+}
+
+# Or use a heatmap to look at one parameter at a time
+for (sym in symbol){
+  dfName <- paste(sym,"stats", sep = "")
+  statSubsetDf <- subset(stats, Symbol == sym)
+  assign(dfName, statSubsetDf)
+  z <- tapply(X=statSubsetDf$Ann.Sharpe, 
+              INDEX = list(statSubsetDf$ma_fast,statSubsetDf$ma_slow), 
+              FUN = median)
+  x <- as.numeric(rownames(z))
+  y <- as.numeric(colnames(z))
+  filled.contour(x=x,y=y,z=z,color=heat.colors,xlab="ma_fast",ylab="ma_slow")
+  title(sym)
+}
+
 Sys.setenv(TZ=ttz)                                             # Return to original time zone

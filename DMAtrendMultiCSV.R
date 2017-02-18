@@ -14,8 +14,8 @@ csvDir       <- "C:/Users/RJK/Documents/SpiderOak Hive/Financial/commodities_dat
 xtsDates     <- "2006/"      # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast = 20
-MAslow = 200
+MAfast = 50
+MAslow = 100
 
 # Strategy Functions
 
@@ -23,7 +23,7 @@ MAslow = 200
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
 currency('USD')                          # set USD as a base currency
-symbol <- c("LSU","RR","CO","NG","OJ")   # Universe selection
+symbol <- c("LSU","RR","CO","NG","OJ","LB")   # Universe selection
 
 for (sym in symbol){
   future(sym, currency = "USD", multiplier = 1)
@@ -144,8 +144,8 @@ updateEndEq(account.st)
 # Plot the charts fo each symbol
 for (sym in symbol){
   chart.Posn(Portfolio = portfolio.st, Symbol = sym, 
-             TA=list("add_SMA(n=20)","add_SMA(n=200)"),
-             Dates = "1995-01::2017-01") # Chart the position 
+             TA=list("add_SMA(n=50)","add_SMA(n=100)"),
+             Dates = "1995-01::1998-01") # Chart the position 
 }
 stats <- tradeStats(portfolio.st)
 
