@@ -17,16 +17,26 @@ csvDir       <- "C:/Users/RJK/Documents/SpiderOak Hive/Financial/commodities_dat
 xtsDates     <- "2006/"      # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast = seq(5, 100, by = 5)        #fast moving average period
-MAslow = seq(10, 200, by = 10)      #slow moving average period
+MAfast = seq(10, 100, by = 10)        #fast moving average period
+MAslow = seq(20, 200, by = 20)        #slow moving average period
 
 # Strategy Functions
+setRisk <- function(symlist){
+  n = 0
+  for (sym in symlist){
+    n = n+1
+  }
+  risk <- round(1/n, digits = 2)
+  return(risk)
+}
 
 #Symbol Setup
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
 currency('USD')                          # set USD as a base currency
-symbol <- c("LSU","RR","CO","NG","OJ","LB")   # Universe selection
+symbol <- c("LSU","RR","CO","NG","OJ","LB","HG","LC")   # Universe selection
+risk <- setRisk(symbol)                                 # set the risk for rebalancing using the function
+
 
 for (sym in symbol){
   future(sym, currency = "USD", multiplier = 1)
@@ -83,35 +93,11 @@ add.signal(strategy=strat,name='sigCrossover',arguments =
 )
 
 # Add the rules - what trades to make on the signals giving using osMaxPos to limit positions.
-
-add.rule(strategy=strat,
-         name='ruleSignal',
-         arguments=list(sigcol='long' , sigval=TRUE,
-                        orderside='long' ,
-                        ordertype='stoplimit', prefer='High',
-                        orderqty=+100, osFUN='osMaxPos', orderset = 'ocolong',
-                        replace=FALSE
-         ),
-         type='enter',
-         label='EnterLONG'
-)
-add.rule(strategy=strat,
-         name='ruleSignal',
-         arguments=list(sigcol='short', sigval=TRUE,
-                        orderside='short',
-                        ordertype='stoplimit', prefer='Low',
-                        orderqty=-100, osFUN='osMaxPos', orderset = 'ocoshort',
-                        replace=FALSE
-         ),
-         type='enter',
-         label='EnterSHORT'
-)
-
 add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='long' , sigval=TRUE,
                         orderside='short',
                         ordertype='market',
-                        orderqty='all', orderset = 'ocolong',
+                        orderqty="all",
                         replace=TRUE
          ),
          type='exit',
@@ -122,23 +108,48 @@ add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE,
                         orderside='long' ,
                         ordertype='market',
-                        orderqty='all', orderset = 'ocoshort',
+                        orderqty="all",
                         replace=TRUE
          ),
          type='exit',
          label='Exit2SHORT'
 )
 
+add.rule(strategy=strat,
+         name='ruleSignal',
+         arguments=list(sigcol='long' , sigval=TRUE,
+                        orderside='long' ,
+                        ordertype='stoplimit', prefer='High',
+                        orderqty=+100, osFUN='osMaxPos',
+                        replace=FALSE
+         ),
+         type='enter',
+         label='EnterLONG'
+)
+add.rule(strategy=strat,
+         name='ruleSignal',
+         arguments=list(sigcol='short', sigval=TRUE,
+                        orderside='short',
+                        ordertype='stoplimit', prefer='Low',
+                        orderqty=-100, osFUN='osMaxPos', 
+                        replace=FALSE
+         ),
+         type='enter',
+         label='EnterSHORT'
+)
+
+
 # Percentage Equity rebalancing rule
 add.rule(strat, 'rulePctEquity',
          arguments=list(rebalance_on='months',
-                        trade.percent=1,
+                        trade.percent=risk,
                         refprice=quote(last(getPrice(mktdata)[paste('::',curIndex,sep='')])[,1]),
                         digits=0
          ),
          type='rebalance',
          label='rebalance')
 
+# Add distributions and constraints
 add.distribution(portfolio.st,
                  paramset.label = "DMA_OPT",
                  component.type = "indicator",

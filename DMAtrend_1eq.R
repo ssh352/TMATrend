@@ -68,8 +68,6 @@ add.signal(strategy=strat,name='sigCrossover',arguments =
 )
 
 # Add the rules - what trades to make on the signals giving using osMaxPos to limit positions.
-
-
 add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='long' , sigval=TRUE,
                         orderside='short',
