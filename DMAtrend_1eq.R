@@ -16,7 +16,7 @@ account.st   <- "DMA1EQ"       # Account name
 initEq       <- 10000          # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast = 20
+MAfast = 70
 MAslow = 200
 
 # Strategy Functions
@@ -42,8 +42,7 @@ strategy(strat, store = TRUE)
 addPosLimit(strat, symbol, timestamp="1995-01-01", maxpos=100, 
             longlevels = 1, minpos=-100, shortlevels = 1)
 
-# Add the indicators - One bband for the breakout another for the stop
-
+# Add the indicators
 add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,1]),
                                                            n = MAfast), label = "nFast"
 )
@@ -67,52 +66,42 @@ add.signal(strategy=strat,name='sigCrossover',arguments =
            label='short'
 )
 
-# Add the rules - what trades to make on the signals giving using osMaxPos to limit positions.
-add.rule(strategy = strat, name='ruleSignal',
-         arguments=list(sigcol='long' , sigval=TRUE,
-                        orderside='short',
-                        ordertype='market',
-                        orderqty="all",
-                        replace=TRUE
-         ),
-         type='exit',
-         label='Exit2LONG'
-)
-
-add.rule(strategy = strat, name='ruleSignal',
-         arguments=list(sigcol='short', sigval=TRUE,
-                        orderside='long' ,
-                        ordertype='market',
-                        orderqty="all",
-                        replace=TRUE
-         ),
-         type='exit',
-         label='Exit2SHORT'
-)
-
+# Add the rules
+# a) Entry rules - enter on moving average cross, osMaxPos is the order function
 add.rule(strategy=strat,
          name='ruleSignal',
-         arguments=list(sigcol='long' , sigval=TRUE,
-                        orderside='long' ,
-                        ordertype='stoplimit', prefer='High',
-                        orderqty=+100, osFUN='osMaxPos',
-                        replace=FALSE
+         arguments=list(sigcol='long', sigval=TRUE, orderside='long', ordertype='market', 
+                        orderqty=+100, osFUN='osMaxPos', replace=FALSE
          ),
          type='enter',
          label='EnterLONG'
 )
+
 add.rule(strategy=strat,
          name='ruleSignal',
-         arguments=list(sigcol='short', sigval=TRUE,
-                        orderside='short',
-                        ordertype='stoplimit', prefer='Low',
-                        orderqty=-100, osFUN='osMaxPos', 
-                        replace=FALSE
+         arguments=list(sigcol='short', sigval=TRUE, orderside='short', ordertype='market', 
+                        orderqty=-100, osFUN='osMaxPos', replace=FALSE
          ),
          type='enter',
          label='EnterSHORT'
 )
 
+# b) Exit rules - Close on cross the other way
+add.rule(strategy = strat, name='ruleSignal',
+         arguments=list(sigcol='long' , sigval=TRUE, orderside=NULL, ordertype='market',
+                        orderqty="all", replace=TRUE, orderset = "ocolong"
+         ),
+         type='exit',
+         label='ExitLONG'
+)
+
+add.rule(strategy = strat, name='ruleSignal',
+         arguments=list(sigcol='short', sigval=TRUE, orderside=NULL , ordertype='market',
+                        orderqty="all", replace=TRUE, orderset = "ocoshort"
+         ),
+         type='exit',
+         label='ExitSHORT'
+)
 
 # Percentage Equity rebalancing rule
 add.rule(strat, 'rulePctEquity',

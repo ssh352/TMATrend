@@ -6,9 +6,6 @@
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
-library(doParallel)       # For parrallel optimization
-library(rgl)              # Library to load 3D trade graphs
-library(reshape2)         # Library to load 3D trade graphs
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
@@ -16,13 +13,16 @@ Sys.setenv(TZ='UTC')
 strat        <- "DMA1EQ"       # Give the stratgey a name variable
 portfolio.st <- "DMA1EQ"       # Portfolio name
 account.st   <- "DMA1EQ"       # Account name
-initEq       <- 100000          # this parameter is required to get pct equity rebalancing to work
+initEq       <- 10000          # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast = seq(5, 200, by = 5)        #fast moving average period
-MAslow = seq(10, 400, by = 10)      #slow moving average period
+MAfast <- 100
+MAslow <- 300
 
 # Strategy Functions
+stoppct <- function(){
+  return(0.04)
+}
 
 # Symbols etc
 currency('USD')             # set USD as a base currency
@@ -55,8 +55,14 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
                                                            n = MAslow), label = "nSlow"
 )
 
+add.indicator(strategy = strat,name = "ATR",arguments=list(HLC=quote(mktdata),
+                                                           n = 14), label = "ATR"
+)
+
+
 # Add the signals -  Go long on a cross of the close greater than the breakout band and close on a cross 
 # less than the close band. Signals reversed for a short.
+
 add.signal(strategy=strat,name='sigCrossover', arguments = 
              list(columns=c("nFast", "nSlow"),relationship="gt"
              ),
@@ -64,17 +70,17 @@ add.signal(strategy=strat,name='sigCrossover', arguments =
 )
 
 add.signal(strategy=strat,name='sigCrossover',arguments = 
-             list(columns=c("nFast", "nSlow"),relationship="lt"
+             list(columns=c("nFast", "nSlow"),relationship="lte"
              ),
            label='short'
 )
 
-# Add the rules - what trades to make on the signals giving using osMaxPos to limit positions.
+# Add the rules
 # a) Entry rules - enter on moving average cross, osMaxPos is the order function
 add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside='long', ordertype='market', 
-                        orderqty=+100, osFUN='osMaxPos', replace=FALSE
+                         orderqty=+100, osFUN='osMaxPos', replace=FALSE
          ),
          type='enter',
          label='EnterLONG'
@@ -106,6 +112,27 @@ add.rule(strategy = strat, name='ruleSignal',
          label='ExitSHORT'
 )
 
+# c) Stoploss rules
+add.rule(strategy=strat,
+         name='ruleSignal',
+         arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
+                        prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
+                        tmult=TRUE, threshold=quote(stoppct())
+         ),
+         type='chain', parent = "EnterLONG",
+         label='StopLONG',enabled = FALSE
+)
+
+add.rule(strategy=strat,
+         name='ruleSignal',
+         arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
+                        prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
+                        tmult=TRUE, threshold=quote(stoppct())
+         ),
+         type='chain', parent = "EnterSHORT",
+         label='StopSHORT',enabled = FALSE
+)
+
 # Percentage Equity rebalancing rule
 add.rule(strat, 'rulePctEquity',
          arguments=list(rebalance_on='months',
@@ -116,61 +143,28 @@ add.rule(strat, 'rulePctEquity',
          type='rebalance',
          label='rebalance')
 
-# Add distributions and constraints
-add.distribution(portfolio.st,
-                 paramset.label = "DMA_OPT",
-                 component.type = "indicator",
-                 component.label = "nFast",
-                 variable = list( n = MAfast ),
-                 label = "ma_fast"
-)
+enable.rule(strat,type = "chain",label = "StopLONG")
+enable.rule(strat,type = "chain",label = "StopSHORT")
+out <- applyStrategy.rebalancing(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
+updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio
+updateAcct(name = account.st)
+updateEndEq(account.st)
 
-add.distribution(portfolio.st,
-                 paramset.label = "DMA_OPT",
-                 component.type = "indicator",
-                 component.label = "nSlow",
-                 variable = list( n = MAslow ),
-                 label = "ma_slow"
-)
+#chart the position
+chart.Posn(Portfolio = portfolio.st, Symbol = symbol, 
+           TA=list("add_SMA(n=70)","add_SMA(n=200)"), 
+           Dates = "1995-05::2017-01")          # Chart the position
+stats <- tradeStats(portfolio.st)
+OB <- get.orderbook(portfolio.st)
+orders <- OB$DMA1EQ$GSPC
 
-add.distribution.constraint(portfolio.st,
-                            paramset.label = "DMA_OPT",
-                            distribution.label.1 = "ma_fast",
-                            distribution.label.2 = "ma_slow",
-                            operator = "<",
-                            label = "fastLTslow")
-
-# Register the cores for parralel procssing
-registerDoParallel(cores=detectCores())
-
-# Now apply the parameter sets for optimization
-out <- apply.paramset(strat, paramset.label = "DMA_OPT",
-                      portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
-stats <- out$tradeStats
-
-# A loop to investigate the parameters via a 3D graph
-for (sym in symbol){
-  dfName <- paste(sym,"stats", sep = "")
-  statSubsetDf <- subset(stats, Symbol == sym)
-  assign(dfName, statSubsetDf)
-  tradeGraphs(stats = statSubsetDf, 
-              free.params=c("ma_fast","ma_slow"),
-              statistics = c("Ann.Sharpe","Profit.To.Max.Draw","Min.Equity"), 
-              title = sym)
-}
-
-# Or use a heatmap to look at one parameter at a time
-for (sym in symbol){
-  dfName <- paste(sym,"stats", sep = "")
-  statSubsetDf <- subset(stats, Symbol == sym)
-  assign(dfName, statSubsetDf)
-  z <- tapply(X=statSubsetDf$Ann.Sharpe, 
-              INDEX = list(statSubsetDf$ma_fast,statSubsetDf$ma_slow), 
-              FUN = median)
-  x <- as.numeric(rownames(z))
-  y <- as.numeric(colnames(z))
-  filled.contour(x=x,y=y,z=z,color=heat.colors,xlab="ma_fast",ylab="ma_slow")
-  title(sym)
-}
-
+#plot the returns vs buy and hold
+eq1 <- getAccount(account.st)$summary$End.Eq
+rt1 <- Return.calculate(eq1,"log")
+rt2 <- periodReturn(GSPC, period = "daily")
+returns <- cbind(rt1,rt2)
+colnames(returns) <- c("DMA","SP500")
+chart.CumReturns(returns,colorset=c(2,4),legend.loc="topleft",
+                 main="Simple Dual Moving Average to Benchmark Comparison",ylab="cum return",xlab="",
+                 minor.ticks=FALSE)
 Sys.setenv(TZ=ttz)                                             # Return to original time zone

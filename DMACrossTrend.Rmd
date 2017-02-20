@@ -1,0 +1,185 @@
+---
+title: "DMACross trend"
+author: "RJ Kumar"
+date: "20 February 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this post, I'm going to post the code for a very simple trading strategy in quanstrat. It is the classic dual moving average trend following strategy. The basic idea is that you plot two moving averages on a chart, one over a shorter period than the other. If the fast moving average is above the slow moving average you want to be long and is it is below you want to be short.
+
+This strategy is about as simple as it gets, but it has helped we understand some of the basics of how quantstrat works, and some details too, by looking at the diferences between this and the luxor demo available with the quantstrat package and also by implementing a rebalancing rule. I plan to make a series of this, implementing additional features such as optimization and different types of stop losses. I realise there are already tutorials similar to this out there, but the more the merrier!
+
+OK so the first chunk of code loads the package we need (which are all loaded by loading quantstrat), then we set the variables we need to run a strategy in quantstrat. These are a portfolio name, a strategy name and an account name. Here they are all called the same. If you want to implement a rebalancing rule you must also have a variable called initEq. Lastly, we have strategy specific variables, in this case the period of the moving averages.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Library and time zone setup
+library(quantstrat)       # Required package for strategy back testing
+ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
+Sys.setenv(TZ='UTC')
+
+# Quantstrat general variables
+strat        <- "DMA1EQ"       # Give the stratgey a name variable
+portfolio.st <- "DMA1EQ"       # Portfolio name
+account.st   <- "DMA1EQ"       # Account name
+initEq       <- 10000          # this parameter is required to get pct equity rebalancing to work
+
+# Strategy specific variables
+MAfast = 70
+MAslow = 200
+```
+
+Now that the variables have been set, we can move on to initializing the environment to cotain all the elements that we need to run the strategy. That is, we initialise an instrument, then grab the required price data. Then remove the strategy objects if it has been run previously, otherwise you can get some crazy results. Then we set up the portfolio, the account, the orders and the strategy. These are the basics needed to run a strategy, but we additionally add a position limit, which is exactly what it sounds like, a limit to the maximum position that we can hold in whole units. This is needed to implement a rebalancing rule.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Symbols etc
+currency('USD')             # set USD as a base currency
+symbol <- "GSPC"            # Universe selection At this stage is only one symbol
+
+# set the instument as a future and get the data from yahoo
+stock(symbol, currency = "USD", multiplier = 1)
+getSymbols("^GSPC", from = '1995-01-01')
+
+# if run previously, run this code from here down
+rm.strat(portfolio.st)
+
+# initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
+initPortf(portfolio.st, symbols = symbol, initDate = "1995-01-01")
+initAcct(account.st, portfolios = portfolio.st, initEq = initEq, initDate = "1995-01-01")
+initOrders(portfolio = portfolio.st, initDate = "1995-01-01")
+
+# define the strategy with a position limit to prevent multiple trades in a direction
+strategy(strat, store = TRUE)
+addPosLimit(strat, symbol, timestamp="1995-01-01", maxpos=100, 
+            longlevels = 1, minpos=-100, shortlevels = 1)
+
+```
+
+The above code can be fairly consistent between strategies, with th exception of strategy specific variables. Now we get into setting up the strategy. Firstly, we add the indicators. Quantstrat creats a mktdata object that contains the price data, indicator values and signals. Here we add an indictor to our strategy using a pre definied indictor from th TTR package, to which we pass the required parameters. It is not required to use TTR functions, we could use any function, even make our own
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Add the indicators
+add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,1]),
+                                                           n = MAfast), label = "nFast"
+)
+
+add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,1]),
+                                                           n = MAslow), label = "nSlow"
+)
+```
+
+Once we have the indictors we would like now we need to generate the signals for when to execute or close a trade. In this case we would like to know when the faster moving average crossed the slower one in either direction, so we use the predefined sigCrossover signal function from quantstrat. There are other signal functions we can use that give greater felxibility, but here sigCrossover is great. Now, when the strategy is executed, quantstrat will create the indicators and evaluate the signals (as columns containing a 1 for a positive signal) in the mktdata object.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Add the signals -  Go long on a cross of the close greater than the breakout band and close on a cross 
+# less than the close band. Signals reversed for a short.
+
+add.signal(strategy=strat,name='sigCrossover', arguments = 
+             list(columns=c("nFast", "nSlow"),relationship="gt"
+             ),
+           label='long'
+)
+
+add.signal(strategy=strat,name='sigCrossover',arguments = 
+             list(columns=c("nFast", "nSlow"),relationship="lt"
+             ),
+           label='short'
+)
+```
+
+With the signals generated all that remains is to generate the trading rules. Here, the first two rules are to place a trade at the market value, either short or long, when the corresponding signal column has a signal (a 1) in it. We also set the oreder quantity and assign an order size function, here we use the osMaxPos function that is included in the package that works wth the position limit we set earlier to limit the position size. These entry rules differ from those in the LUXOR demo in that they use market orders, whereas the LUXOR demo uses stoplimit orders. Market orders are filled at the market rate, according to the method you set in the rule, whereas a stoplimit order is set at a price and can hang around for ever unless an expiry is set or all orders are cancelled. That can cause problems for this strategy, so we use market orders instead.
+
+The exit orders look for the opposite signal to the direction of the trade, and close all orders when a signal is observed. I've also included them in an orderset, for future incorporation of a stop loss, however I observed that when I included the entry orders in the orderset the strategy only traded on one side. I'm still not sure why.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Add the rules
+# a) Entry rules - enter on moving average cross, osMaxPos is the order function
+add.rule(strategy=strat,
+         name='ruleSignal',
+         arguments=list(sigcol='long', sigval=TRUE, orderside='long', ordertype='market', 
+                        orderqty=+100, osFUN='osMaxPos', replace=FALSE
+         ),
+         type='enter',
+         label='EnterLONG'
+)
+
+add.rule(strategy=strat,
+         name='ruleSignal',
+         arguments=list(sigcol='short', sigval=TRUE, orderside='short', ordertype='market', 
+                        orderqty=-100, osFUN='osMaxPos', replace=FALSE
+         ),
+         type='enter',
+         label='EnterSHORT'
+)
+
+# b) Exit rules - Close on cross the other way
+add.rule(strategy = strat, name='ruleSignal',
+         arguments=list(sigcol='long' , sigval=TRUE, orderside=NULL, ordertype='market',
+                        orderqty="all", replace=TRUE, orderset = "ocolong"
+         ),
+         type='exit',
+         label='ExitLONG'
+)
+
+add.rule(strategy = strat, name='ruleSignal',
+         arguments=list(sigcol='short', sigval=TRUE, orderside=NULL , ordertype='market',
+                        orderqty="all", replace=TRUE, orderset = "ocoshort"
+         ),
+         type='exit',
+         label='ExitSHORT'
+)
+```
+
+Finally,  the percentage rebalancing rule is included, which works with osMaxPos to limit the orders to a percentage of our equity. Here it is set to trade out whole balance on each position as there is only one instrument, but if there was more than one it might be useful to adjust it. A warning, rebalancing sows execution a lot, but I think it is needed to get an accurate comparison with a buy and hold strategy.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Percentage Equity rebalancing rule
+add.rule(strat, 'rulePctEquity',
+         arguments=list(rebalance_on='months',
+                        trade.percent=1,
+                        refprice=quote(last(getPrice(mktdata)[paste('::',curIndex,sep='')])[,1]),
+                        digits=0
+         ),
+         type='rebalance',
+         label='rebalance')
+```
+
+The final hurdle is to run the strategy as follows.There should be output in the form of dates and trade sizes.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+out <- applyStrategy.rebalancing(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
+```
+
+Finally, the portfolio, account and equiyt are updated and the output plotted.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio
+updateAcct(name = account.st)
+updateEndEq(account.st)
+
+#chart the position
+chart.Posn(Portfolio = portfolio.st, Symbol = symbol, 
+           TA=list("add_SMA(n=10)","add_SMA(n=100)"), 
+           Dates = "1996-01::2016-12")          # Chart the position
+```
+
+And its returns can be compared to a buy and hold strategy as follows
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+#plot the returns vs buy and hold
+eq1 <- getAccount(account.st)$summary$End.Eq
+rt1 <- Return.calculate(eq1,"log")
+rt2 <- periodReturn(GSPC, period = "daily")
+returns <- cbind(rt1,rt2)
+colnames(returns) <- c("DMA","SP500")
+chart.CumReturns(returns,colorset=c(2,4),legend.loc="topleft",
+                 main="Simple Dual Moving Average to Benchmark Comparison",ylab="cum return",xlab="",
+                 minor.ticks=FALSE)
+Sys.setenv(TZ=ttz)                                             # Return to original time zone
+
+```
+
+So, it doesn;t beat buy and hold in terms of return, but may well in terms of risk adjusted return. This can be further investigated with the Performance Analytics package. Next time, optimization.
