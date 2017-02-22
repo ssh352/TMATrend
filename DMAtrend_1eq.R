@@ -20,7 +20,7 @@ initEq       <- 10000          # this parameter is required to get pct equity re
 # Strategy specific variables
 MAfast <- 100
 MAslow <- 300
-atrMult <- 5
+atrMult <- 1
 
 # Strategy Functions
 # Custom indicator to generate the threshold multiplier to set an ATR based stop, if a simple % multiplier
@@ -28,7 +28,7 @@ atrMult <- 5
 atrStopThresh <- function(HLC, n=14, atr_mult=2){
   ATR <- ATR(HLC = HLC, n)
   pctATR <- (atr_mult*ATR$atr)/Cl(HLC)
-  return(pctATR)
+  pctATR
 }
 
 # Symbols etc
@@ -127,7 +127,7 @@ add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
-                        tmult=TRUE, threshold=quote(mktdata$atr.atrStopThresh[timestamp])
+                        tmult=TRUE, threshold="atr.atrStopThresh"
          ),
          type='chain', parent = "EnterLONG",
          label='StopLONG',enabled = FALSE
@@ -137,7 +137,7 @@ add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
-                        tmult=TRUE, threshold=quote(mktdata$atr.atrStopThresh[timestamp])
+                        tmult=TRUE, threshold="atr.atrStopThresh"
          ),
          type='chain', parent = "EnterSHORT",
          label='StopSHORT',enabled = FALSE

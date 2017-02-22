@@ -9,13 +9,14 @@ Sys.setenv(TZ='UTC')
 strat        <- "DMA1EQ"       # Give the stratgey a name variable
 portfolio.st <- "DMA1EQ"       # Portfolio name
 account.st   <- "DMA1EQ"       # Account name
-initEq       <- 1000000        # this parameter is required to get pct equity rebalancing to work
+initEq       <- 100000        # this parameter is required to get pct equity rebalancing to work
 csvDir       <- "C:/Users/RJK/Documents/SpiderOak Hive/Financial/commodities_data" # Directory containing csv files
 xtsDates     <- "2006/"      # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast = 50
-MAslow = 100
+MAfast  <- 50
+MAslow  <- 200
+atrMult <- 5
 
 # Strategy Functions
 # A function to set the risk for rebalancing based on the number of symbols
@@ -26,6 +27,12 @@ setRisk <- function(symlist){
   }
   risk <- round(1/n, digits = 2)
   return(risk)
+}
+
+atrStopThresh <- function(HLC, n=14, atr_mult=2){
+  ATR <- ATR(HLC = HLC, n)
+  pctATR <- (atr_mult*ATR$atr)/Cl(HLC)
+  pctATR
 }
 
 #Symbol Setup
@@ -70,6 +77,10 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
 
 add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,1]),
                                                            n = MAslow), label = "nSlow"
+)
+
+add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
+                                                                     n = 14, atr_mult=atrMult), label = "atrStopThresh"
 )
 
 # Add the signals -  Go long on a cross of the close greater than the breakout band and close on a cross 
@@ -123,6 +134,28 @@ add.rule(strategy = strat, name='ruleSignal',
          label='ExitSHORT'
 )
 
+# c) Stoploss rules
+add.rule(strategy=strat,
+         name='ruleSignal',
+         arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
+                        prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
+                        tmult=TRUE, threshold="atr.atrStopThresh"
+         ),
+         type='chain', parent = "EnterLONG",
+         label='StopLONG',enabled = FALSE
+)
+
+add.rule(strategy=strat,
+         name='ruleSignal',
+         arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
+                        prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
+                        tmult=TRUE, threshold="atr.atrStopThresh"
+         ),
+         type='chain', parent = "EnterSHORT",
+         label='StopSHORT',enabled = FALSE
+)
+
+
 # Percentage Equity rebalancing rule
 add.rule(strat, 'rulePctEquity',
          arguments=list(rebalance_on='months',
@@ -133,6 +166,9 @@ add.rule(strat, 'rulePctEquity',
          type='rebalance',
          label='rebalance')
 
+enable.rule(strat,type = "chain",label = "StopLONG")
+enable.rule(strat,type = "chain",label = "StopSHORT")
+
 # Apply the strategy assigning the output to a variable out
 out <- applyStrategy.rebalancing(strategy=strat , portfolios=portfolio.st)
 updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio, acct and endeq
@@ -142,7 +178,7 @@ updateEndEq(account.st)
 # Plot the charts fo each symbol
 for (sym in symbol){
   chart.Posn(Portfolio = portfolio.st, Symbol = sym, 
-             TA=list("add_SMA(n=25)","add_SMA(n=175)"),
+             TA=list("add_SMA(n=50)","add_SMA(n=200)"),
              Dates = "2006-01::2017-01") # Chart the position 
 }
 stats <- tradeStats(portfolio.st)
