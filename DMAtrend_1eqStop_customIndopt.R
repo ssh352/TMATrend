@@ -8,6 +8,9 @@
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
+library(doParallel)       # For parrallel optimization
+library(rgl)              # Library to load 3D trade graphs
+library(reshape2)         # Library to load 3D trade graphs
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
@@ -18,9 +21,9 @@ account.st   <- "DMA1EQ"       # Account name
 initEq       <- 10000          # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast <- 100
-MAslow <- 300
-atrMult <- 5
+MAfast  <- 10        #fast moving average period
+MAslow  <- 100        #slow moving average period
+atrMult <- seq(1, 5, by = 1)            #atr multiplier
 
 # Strategy Functions
 # Custom indicator to generate the threshold multiplier to set an ATR based stop, if a simple % multiplier
@@ -40,6 +43,7 @@ stock(symbol, currency = "USD", multiplier = 1)
 getSymbols("^GSPC", from = '1995-01-01')
 
 # if run previously, run this code from here down
+delete.paramset(portfolio.st,"DMA_OPT")
 rm.strat(portfolio.st)
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
@@ -62,12 +66,9 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
                                                            n = MAslow), label = "nSlow"
 )
 
-add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
-                                                           n = 100, atr_mult=atrMult), label = "atrStopThresh"
-)
-
-add.indicator(strategy = strat,name = "ATR",arguments=list(HLC=quote(mktdata),
-                                                                     n = 100), label = "atr"
+add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(OHLC(mktdata)),
+                                                          atr_mult = atrMult), 
+              label = "atr_mult_stop"
 )
 
 # Add the signals -  Go long on a cross of the close greater than the breakout band and close on a cross 
@@ -126,55 +127,36 @@ add.rule(strategy = strat, name='ruleSignal',
 add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
-                        prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
-                        tmult=TRUE, threshold=quote(mktdata$atr.atrStopThresh[timestamp])
+                        orderqty="all", replace=FALSE, orderset ="ocolong",
+                        tmult=TRUE, threshold="atr.atrStopThresh"
          ),
          type='chain', parent = "EnterLONG",
-         label='StopLONG',enabled = FALSE
+         label='StopLONG',enabled = TRUE
 )
 
 add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
-                        prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
-                        tmult=TRUE, threshold=quote(mktdata$atr.atrStopThresh[timestamp])
+                        orderqty="all", replace=FALSE, orderset ="ocoshort",
+                        tmult=TRUE, threshold="atr.atrStopThresh"
          ),
          type='chain', parent = "EnterSHORT",
-         label='StopSHORT',enabled = FALSE
+         label='StopSHORT',enabled = TRUE
 )
 
-# Percentage Equity rebalancing rule
-add.rule(strat, 'rulePctEquity',
-         arguments=list(rebalance_on='months',
-                        trade.percent=1,
-                        refprice=quote(last(getPrice(mktdata)[paste('::',curIndex,sep='')])[,1]),
-                        digits=0
-         ),
-         type='rebalance',
-         label='rebalance')
+# Add distributions and constraints
+add.distribution(portfolio.st,
+                 paramset.label = "DMA_OPT",
+                 component.type = "indicator",
+                 component.label = "atr_mult_stop",
+                 variable = list(atr_mult = atrMult),
+                 label = "atr_mult_stop"
+)
 
-enable.rule(strat,type = "chain",label = "StopLONG")
-enable.rule(strat,type = "chain",label = "StopSHORT")
-out <- applyStrategy.rebalancing(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
-updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio
-updateAcct(name = account.st)
-updateEndEq(account.st)
+# Now apply the parameter sets for optimization
+out <- apply.paramset(strat, paramset.label = "DMA_OPT",
+                      portfolio=portfolio.st, account = account.st, 
+                      nsamples=0, verbose = TRUE,audit = globalenv())
+stats <- out$tradeStats
 
-#chart the position
-chart.Posn(Portfolio = portfolio.st, Symbol = symbol, 
-           TA=list("add_SMA(n=70)","add_SMA(n=200)"), 
-           Dates = "1995-05::2017-01")          # Chart the position
-stats <- tradeStats(portfolio.st)
-OB <- get.orderbook(portfolio.st)
-orders <- OB$DMA1EQ$GSPC
-
-#plot the returns vs buy and hold
-eq1 <- getAccount(account.st)$summary$End.Eq
-rt1 <- Return.calculate(eq1,"log")
-rt2 <- periodReturn(GSPC, period = "daily")
-returns <- cbind(rt1,rt2)
-colnames(returns) <- c("DMA","SP500")
-chart.CumReturns(returns,colorset=c(2,4),legend.loc="topleft",
-                 main="Simple Dual Moving Average to Benchmark Comparison",ylab="cum return",xlab="",
-                 minor.ticks=FALSE)
 Sys.setenv(TZ=ttz)                                             # Return to original time zone

@@ -14,8 +14,8 @@ csvDir       <- "C:/Users/RJK/Documents/SpiderOak Hive/Financial/commodities_dat
 xtsDates     <- "2006/"      # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast = 70
-MAslow = 200
+MAfast = 50
+MAslow = 100
 
 # Strategy Functions
 # A function to set the risk for rebalancing based on the number of symbols
@@ -32,7 +32,7 @@ setRisk <- function(symlist){
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
 currency('USD')                                         # set USD as a base currency
-symbol <- c("LSU","RR","CO","NG","OJ","LB","HG","LC")   # Universe selection
+symbol <- c("LSU","RR","CO","NG","OJ","LB","HG","LC","CT","KC","CC")   # Universe selection
 risk <- setRisk(symbol)                                 # set the risk for rebalancing using the function
 
 for (sym in symbol){
@@ -87,51 +87,41 @@ add.signal(strategy=strat,name='sigCrossover',arguments =
 )
 
 # Add the rules - what trades to make on the signals giving using osMaxPos to limit positions.
-add.rule(strategy = strat, name='ruleSignal',
-         arguments=list(sigcol='long' , sigval=TRUE,
-                        orderside='short',
-                        ordertype='market',
-                        orderqty="all",
-                        replace=TRUE
-         ),
-         type='exit',
-         label='Exit2LONG'
-)
-
-add.rule(strategy = strat, name='ruleSignal',
-         arguments=list(sigcol='short', sigval=TRUE,
-                        orderside='long' ,
-                        ordertype='market',
-                        orderqty="all",
-                        replace=TRUE
-         ),
-         type='exit',
-         label='Exit2SHORT'
-)
-
+# a) Entry rules - enter on moving average cross, osMaxPos is the order function
 add.rule(strategy=strat,
          name='ruleSignal',
-         arguments=list(sigcol='long' , sigval=TRUE,
-                        orderside='long' ,
-                        ordertype='stoplimit', prefer='High',
-                        orderqty=+100, osFUN='osMaxPos',
-                        replace=FALSE
+         arguments=list(sigcol='long', sigval=TRUE, orderside='long', ordertype='market', 
+                        orderqty=+100, osFUN='osMaxPos', replace=FALSE
          ),
          type='enter',
          label='EnterLONG'
 )
+
 add.rule(strategy=strat,
          name='ruleSignal',
-         arguments=list(sigcol='short', sigval=TRUE,
-                        orderside='short',
-                        ordertype='stoplimit', prefer='Low',
-                        orderqty=-100, osFUN='osMaxPos', 
-                        replace=FALSE
+         arguments=list(sigcol='short', sigval=TRUE, orderside='short', ordertype='market', 
+                        orderqty=-100, osFUN='osMaxPos', replace=FALSE
          ),
          type='enter',
          label='EnterSHORT'
 )
 
+# b) Exit rules - Close on cross the other way
+add.rule(strategy = strat, name='ruleSignal',
+         arguments=list(sigcol='long' , sigval=TRUE, orderside=NULL, ordertype='market',
+                        orderqty="all", replace=TRUE, orderset = "ocolong"
+         ),
+         type='exit',
+         label='ExitLONG'
+)
+
+add.rule(strategy = strat, name='ruleSignal',
+         arguments=list(sigcol='short', sigval=TRUE, orderside=NULL , ordertype='market',
+                        orderqty="all", replace=TRUE, orderset = "ocoshort"
+         ),
+         type='exit',
+         label='ExitSHORT'
+)
 
 # Percentage Equity rebalancing rule
 add.rule(strat, 'rulePctEquity',
@@ -152,7 +142,7 @@ updateEndEq(account.st)
 # Plot the charts fo each symbol
 for (sym in symbol){
   chart.Posn(Portfolio = portfolio.st, Symbol = sym, 
-             TA=list("add_SMA(n=50)","add_SMA(n=100)"),
+             TA=list("add_SMA(n=25)","add_SMA(n=175)"),
              Dates = "2006-01::2017-01") # Chart the position 
 }
 stats <- tradeStats(portfolio.st)
@@ -162,8 +152,8 @@ eq1 <- getAccount(account.st)$summary$End.Eq
 rt1 <- Return.calculate(eq1,"log")
 rt2 <- periodReturn(GSPC, period = "daily")
 returns <- cbind(rt1,rt2)
-colnames(returns) <- c("BB","SP500")
+colnames(returns) <- c("DMA","SP500")
 chart.CumReturns(returns,colorset=c(2,4),legend.loc="topleft",
-                 main="BBand to Benchmark Comparison",ylab="cum return",xlab="",
+                 main="Moving Average Crossover to Benchmark Comparison",ylab="cum return",xlab="",
                  minor.ticks=FALSE)
 Sys.setenv(TZ=ttz)                                             # Return to original time zone
