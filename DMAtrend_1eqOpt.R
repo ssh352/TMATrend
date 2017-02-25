@@ -172,4 +172,29 @@ out <- apply.paramset(strat, paramset.label = "DMA_OPT",
                       portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
 stats <- out$tradeStats
 
+# A loop to investigate the parameters via a 3D graph
+for (a in atrMult){
+  dfName <- paste(a,"stats", sep = "")
+  statSubsetDf <- subset(stats, atr == a)
+  assign(dfName, statSubsetDf)
+  tradeGraphs(stats = statSubsetDf, 
+              free.params=c("ma_fast","ma_slow"),
+              statistics = c("Ann.Sharpe","Profit.To.Max.Draw","Min.Equity"), 
+              title = a)
+}
+
+# Or use a heatmap to look at one parameter at a time
+for (a in atrMult){
+  dfName <- paste(a,"stats", sep = "")
+  statSubsetDf <- subset(stats, atr == a)
+  assign(dfName, statSubsetDf)
+  z <- tapply(X=statSubsetDf$Net.Trading.PL, 
+              INDEX = list(statSubsetDf$ma_fast,statSubsetDf$ma_slow), 
+              FUN = median)
+  x <- as.numeric(rownames(z))
+  y <- as.numeric(colnames(z))
+  filled.contour(x=x,y=y,z=z,color=heat.colors,xlab="ma_fast",ylab="ma_slow")
+  title(a)
+}
+
 Sys.setenv(TZ=ttz)                                             # Return to original time zone
