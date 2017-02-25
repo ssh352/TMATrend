@@ -17,8 +17,9 @@ csvDir       <- "C:/Users/RJK/Documents/SpiderOak Hive/Financial/commodities_dat
 xtsDates     <- "2006/"      # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast = seq(10, 200, by = 10)        #fast moving average period
-MAslow = seq(20, 400, by = 20)        #slow moving average period
+MAfast <- seq(10, 200, by = 10)        #fast moving average period
+MAslow <- seq(20, 400, by = 20)        #slow moving average period
+atrMult <- 5
 
 # Strategy Functions
 setRisk <- function(symlist){
@@ -28,6 +29,12 @@ setRisk <- function(symlist){
   }
   risk <- round(1/n, digits = 2)
   return(risk)
+}
+
+atrStopThresh <- function(HLC, n=14, atr_mult=2){
+  ATR <- ATR(HLC = HLC, n)
+  pctATR <- round((atr_mult*ATR$atr)/Cl(HLC),digits=5)
+  pctATR
 }
 
 #Symbol Setup
@@ -66,7 +73,7 @@ for (sym in symbol){
               longlevels = 1, minpos=-100, shortlevels = 1)
 }
 
-# Add the indicators - One bband for the breakout another for the stop
+# Add the indicators - slow and fast SMA
 add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,1]),
                                                            n = MAfast), label = "nFast"
 )
@@ -126,15 +133,26 @@ add.rule(strategy = strat, name='ruleSignal',
          label='ExitSHORT'
 )
 
-# Percentage Equity rebalancing rule
-add.rule(strat, 'rulePctEquity',
-         arguments=list(rebalance_on='months',
-                        trade.percent=risk,
-                        refprice=quote(last(getPrice(mktdata)[paste('::',curIndex,sep='')])[,1]),
-                        digits=0
+# c) Stoploss rules
+add.rule(strategy=strat,
+         name='ruleSignal',
+         arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
+                        prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
          ),
-         type='rebalance',
-         label='rebalance')
+         type='chain', parent = "EnterLONG",
+         label='StopLONG',enabled = FALSE
+)
+
+add.rule(strategy=strat,
+         name='ruleSignal',
+         arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
+                        prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
+         ),
+         type='chain', parent = "EnterSHORT",
+         label='StopSHORT',enabled = FALSE
+)
 
 # Add distributions and constraints
 add.distribution(portfolio.st,

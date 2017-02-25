@@ -128,7 +128,7 @@ add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         orderqty="all", replace=FALSE, orderset ="ocolong",
-                        tmult=TRUE, threshold="atr.atrStopThresh"
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
          ),
          type='chain', parent = "EnterLONG",
          label='StopLONG',enabled = TRUE
@@ -138,7 +138,7 @@ add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         orderqty="all", replace=FALSE, orderset ="ocoshort",
-                        tmult=TRUE, threshold="atr.atrStopThresh"
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
          ),
          type='chain', parent = "EnterSHORT",
          label='StopSHORT',enabled = TRUE

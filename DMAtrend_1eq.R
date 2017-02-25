@@ -1,10 +1,8 @@
 # This strategy uses a simple moving average crossover (MAfast and MASlow), to either a) go long if the fast
-# moving avergae is above the slow moving average or b) short if the fast moving avergae is below the slow 
-# moving average. It is essentially a modified version of the luxor demo, with the ordersets removed. This
-# prevents the one closes other behaviour and allows us to be always in the market. Has a rebalancing rule 
-# that enables us to compare being 100% invested in this strategy to buy and hold. No leverage. Here the
-# simple percentage multiple stop loss is replace with an ATR based stop loss, which is implemented
-# via a custom indicatoe. Working.
+# moving avergae is above the slow moving average or b) short if the fast moving average is below the slow 
+# moving average. Has a rebalancing rule that enables us to compare being 100% invested in this strategy to 
+# buy and hold. No leverage. Here the simple percentage multiple stop loss is replace with an ATR based stop
+# loss, which is implemented via a custom indicator. Single equity data from yahoo. Working.
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
@@ -12,19 +10,18 @@ ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
 # Quantstrat general variables
-strat        <- "DMA1EQ"       # Give the stratgey a name variable
-portfolio.st <- "DMA1EQ"       # Portfolio name
-account.st   <- "DMA1EQ"       # Account name
-initEq       <- 10000          # this parameter is required to get pct equity rebalancing to work
+strat        <- "DMA"               # Give the stratgey a name variable
+portfolio.st <- "portf"             # Portfolio name
+account.st   <- "accnt"             # Account name
+initEq       <- 10000               # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast <- 100
-MAslow <- 300
+MAfast  <- 100
+MAslow  <- 300
 atrMult <- 1
 
 # Strategy Functions
-# Custom indicator to generate the threshold multiplier to set an ATR based stop, if a simple % multiplier
-# is desired just set it to return a fixed numeric. e.g. return(0.04)
+# Custom indicator to generate the threshold multiplier to set an ATR based stop.
 atrStopThresh <- function(HLC, n=14, atr_mult=2){
   ATR <- ATR(HLC = HLC, n)
   pctATR <- (atr_mult*ATR$atr)/Cl(HLC)
@@ -39,21 +36,23 @@ symbol <- "GSPC"            # Universe selection At this stage is only one symbo
 stock(symbol, currency = "USD", multiplier = 1)
 getSymbols("^GSPC", from = '1995-01-01')
 
-# if run previously, run this code from here down
-rm.strat(portfolio.st)
+# if run previously, run this code from here down to the strategy definition before re-running
+rm.strat(portfolio.st, silent = FALSE)
+rm.strat(account.st, silent = FALSE)
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
 initPortf(portfolio.st, symbols = symbol, initDate = "1995-01-01")
 initAcct(account.st, portfolios = portfolio.st, initEq = initEq, initDate = "1995-01-01")
 initOrders(portfolio = portfolio.st, initDate = "1995-01-01")
 
-# define the strategy with a position limit to prevent multiple trades in a direction
-strategy(strat, store = TRUE)
-addPosLimit(strat, symbol, timestamp="1995-01-01", maxpos=100, 
+# Add a position limit for the portfolio to prevent multiple trades in a direction
+addPosLimit(portfolio = portfolio.st, symbol, timestamp="1995-01-01", maxpos=100, 
             longlevels = 1, minpos=-100, shortlevels = 1)
 
-# Add the indicators - One bband for the breakout another for the stop
+# Define Strategy
+strategy(strat, store = TRUE)
 
+# Add the indicators - A fast moving average, a slow moving average and the custom indicator
 add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,1]),
                                                            n = MAfast), label = "nFast"
 )
@@ -66,13 +65,7 @@ add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(m
                                                            n = 100, atr_mult=atrMult), label = "atrStopThresh"
 )
 
-add.indicator(strategy = strat,name = "ATR",arguments=list(HLC=quote(mktdata),
-                                                                     n = 100), label = "atr"
-)
-
-# Add the signals -  Go long on a cross of the close greater than the breakout band and close on a cross 
-# less than the close band. Signals reversed for a short.
-
+# Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.
 add.signal(strategy=strat,name='sigCrossover', arguments = 
              list(columns=c("nFast", "nSlow"),relationship="gt"
              ),
@@ -122,12 +115,12 @@ add.rule(strategy = strat, name='ruleSignal',
          label='ExitSHORT'
 )
 
-# c) Stoploss rules
+# c) Stoploss rules using ordersets and ATR based threshold, not enabled by default
 add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
-                        tmult=TRUE, threshold="atr.atrStopThresh"
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
          ),
          type='chain', parent = "EnterLONG",
          label='StopLONG',enabled = FALSE
@@ -137,7 +130,7 @@ add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
-                        tmult=TRUE, threshold="atr.atrStopThresh"
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
          ),
          type='chain', parent = "EnterSHORT",
          label='StopSHORT',enabled = FALSE

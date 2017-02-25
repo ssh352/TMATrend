@@ -25,11 +25,11 @@ atrMult <- 5
 # Strategy Functions
 # Custom indicator to generate the threshold multiplier to set an ATR based stop, if a simple % multiplier
 # is desired just set it to return a fixed numeric. e.g. return(0.04)
-atrStopThresh <- function(HLC, n=14, atr_mult=2){
-  ATR <- ATR(HLC = HLC, n)
-  pctATR <- (atr_mult*ATR$atr)/Cl(HLC)
-  return(pctATR)
+atrStopThresh <- function(x){
+  x <- 0.04
+  return(x)
 }
+
 
 # Symbols etc
 currency('USD')             # set USD as a base currency
@@ -62,13 +62,9 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
                                                            n = MAslow), label = "nSlow"
 )
 
-add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
-                                                           n = 100, atr_mult=atrMult), label = "atrStopThresh"
+add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(x=quote(Cl(mktdata))), label = "atrStopThresh"
 )
 
-add.indicator(strategy = strat,name = "ATR",arguments=list(HLC=quote(mktdata),
-                                                                     n = 100), label = "atr"
-)
 
 # Add the signals -  Go long on a cross of the close greater than the breakout band and close on a cross 
 # less than the close band. Signals reversed for a short.
@@ -155,7 +151,7 @@ add.rule(strat, 'rulePctEquity',
 
 enable.rule(strat,type = "chain",label = "StopLONG")
 enable.rule(strat,type = "chain",label = "StopSHORT")
-out <- applyStrategy.rebalancing(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
+out <- applyStrategy(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
 updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio
 updateAcct(name = account.st)
 updateEndEq(account.st)

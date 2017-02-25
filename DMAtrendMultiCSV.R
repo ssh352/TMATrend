@@ -1,4 +1,8 @@
-# Template for Strategy Development - SP500 testing
+# This strategy uses a simple moving average crossover (MAfast and MASlow), to either a) go long if the fast
+# moving avergae is above the slow moving average or b) short if the fast moving average is below the slow 
+# moving average. Has a rebalancing rule that enables us to compare being 100% invested in this strategy to 
+# buy and hold. No leverage. Here the simple percentage multiple stop loss is replace with an ATR based stop
+# loss, which is implemented via a custom indicator. Multiple data from csv file. Working.
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
@@ -6,12 +10,12 @@ ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
 # Quantstrat general variables
-strat        <- "DMA1EQ"       # Give the stratgey a name variable
-portfolio.st <- "DMA1EQ"       # Portfolio name
-account.st   <- "DMA1EQ"       # Account name
-initEq       <- 100000        # this parameter is required to get pct equity rebalancing to work
+strat        <- "DMA"           # Give the stratgey a name variable
+portfolio.st <- "portf"         # Portfolio name
+account.st   <- "accnt"         # Account name
+initEq       <- 100000          # this parameter is required to get pct equity rebalancing to work
 csvDir       <- "C:/Users/RJK/Documents/SpiderOak Hive/Financial/commodities_data" # Directory containing csv files
-xtsDates     <- "2006/"      # Variable for the point in time you want your prices series to line up from
+xtsDates     <- "2006/"        # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
 MAfast  <- 50
@@ -19,7 +23,7 @@ MAslow  <- 200
 atrMult <- 5
 
 # Strategy Functions
-# A function to set the risk for rebalancing based on the number of symbols
+# A function to set the risk for rebalancing based on the number of symbols. Overly long use length instead
 setRisk <- function(symlist){
   n = 0
   for (sym in symlist){
@@ -29,6 +33,7 @@ setRisk <- function(symlist){
   return(risk)
 }
 
+# Custom indicator to generate the threshold multiplier to set an ATR based stop.
 atrStopThresh <- function(HLC, n=14, atr_mult=2){
   ATR <- ATR(HLC = HLC, n)
   pctATR <- (atr_mult*ATR$atr)/Cl(HLC)
@@ -56,7 +61,8 @@ for (sym in symbol){
 }
 
 # if run previously, run this code from here down
-rm.strat(portfolio.st)
+rm.strat(portfolio.st, silent = FALSE)
+rm.strat(account.st, silent = FALSE)
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
 initPortf(portfolio.st, symbols = symbol, initDate = "1995-01-01")
@@ -64,13 +70,15 @@ initAcct(account.st, portfolios = portfolio.st, initEq = initEq, initDate = "199
 initOrders(portfolio = portfolio.st, initDate = "1995-01-01")
 
 # define the strategy with a position limit to prevent multiple trades in a direction
-strategy(strat, store = TRUE)
 for (sym in symbol){
-  addPosLimit(strat, sym, timestamp="2000-01-01", maxpos=100, 
+  addPosLimit(portfolio = portfolio.st, sym, timestamp="2000-01-01", maxpos=100, 
               longlevels = 1, minpos=-100, shortlevels = 1)
 }
 
-# Add the indicators - One bband for the breakout another for the stop
+# Define Strategy
+strategy(strat, store = TRUE)
+
+# Add the indicators - A fast moving average, a slow moving average and the custom indicator
 add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,1]),
                                                            n = MAfast), label = "nFast"
 )
@@ -83,8 +91,7 @@ add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(m
                                                                      n = 14, atr_mult=atrMult), label = "atrStopThresh"
 )
 
-# Add the signals -  Go long on a cross of the close greater than the breakout band and close on a cross 
-# less than the close band. Signals reversed for a short.
+# Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.
 add.signal(strategy=strat,name='sigCrossover', arguments = 
              list(columns=c("nFast", "nSlow"),relationship="gt"
           ),
@@ -97,7 +104,7 @@ add.signal(strategy=strat,name='sigCrossover',arguments =
   label='short'
 )
 
-# Add the rules - what trades to make on the signals giving using osMaxPos to limit positions.
+# Add the rules
 # a) Entry rules - enter on moving average cross, osMaxPos is the order function
 add.rule(strategy=strat,
          name='ruleSignal',
@@ -134,7 +141,7 @@ add.rule(strategy = strat, name='ruleSignal',
          label='ExitSHORT'
 )
 
-# c) Stoploss rules
+# c) Stoploss rules using ordersets and ATR based threshold, not enabled by default
 add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
