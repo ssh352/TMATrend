@@ -3,7 +3,8 @@
 # moving average. Has a rebalancing rule that enables us to compare being 100% invested in this strategy to 
 # buy and hold. No leverage. Here the simple percentage multiple stop loss is replace with an ATR based stop
 # loss, which is implemented via a custom indicator. Single equity data from yahoo.
-# Optimization of all 3 strategy variables with paramsets is working!
+# Optimization of all 3 strategy variables with paramsets is working! PARALLEL PROC NOT WORKING IN WINDOWS
+# BUT NOT ENOUGH RAM ON WINDOWS COMPUTER ANYWAY
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
@@ -17,12 +18,12 @@ Sys.setenv(TZ='UTC')
 strat        <- "DMA"               # Give the stratgey a name variable
 portfolio.st <- "portf"             # Portfolio name
 account.st   <- "accnt"             # Account name
-initEq       <- 10000               # this parameter is required to get pct equity rebalancing to work
+initEq       <- 1000000               # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast  <- seq(20, 200, by = 20)        #fast moving average period
+MAfast  <- seq(10, 200, by = 10)        #fast moving average period
 MAslow  <- seq(20, 400, by = 20)        #slow moving average period
-atrMult <- seq(1, 3, by = 1)            #atr multiple to use
+atrMult <- seq(1, 5, by = 1)            #atr multiple to use
 
 # Strategy Functions
 # Custom indicator to generate the threshold multiplier to set an ATR based stop.
@@ -66,7 +67,7 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
 )
 
 add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
-                                                                     n = 100, atr_mult=atrMult), label = "atrStopThresh"
+                                                                     n = 14, atr_mult=atrMult), label = "atrStopThresh"
 )
 
 # Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.
@@ -179,7 +180,7 @@ for (a in atrMult){
   assign(dfName, statSubsetDf)
   tradeGraphs(stats = statSubsetDf, 
               free.params=c("ma_fast","ma_slow"),
-              statistics = c("Ann.Sharpe","Profit.To.Max.Draw","Min.Equity"), 
+              statistics = c("Ann.Sharpe","Profit.To.Max.Draw"), 
               title = a)
 }
 

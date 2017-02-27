@@ -16,9 +16,9 @@ account.st   <- "accnt"             # Account name
 initEq       <- 10000               # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast  <- 100
-MAslow  <- 300
-atrMult <- 1
+MAfast  <- 10
+MAslow  <- 180
+atrMult <- 5
 
 # Strategy Functions
 # Custom indicator to generate the threshold multiplier to set an ATR based stop.
@@ -62,7 +62,7 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
 )
 
 add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
-                                                           n = 100, atr_mult=atrMult), label = "atrStopThresh"
+                                                           n = 14, atr_mult=atrMult), label = "atrStopThresh"
 )
 
 # Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.

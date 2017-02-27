@@ -9,19 +9,20 @@ ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
 # Quantstrat general variables
-strat        <- "DMA1EQ"       # Give the stratgey a name variable
-portfolio.st <- "DMA1EQ"       # Portfolio name
-account.st   <- "DMA1EQ"       # Account name
-initEq       <- 1000000        # this parameter is required to get pct equity rebalancing to work
+strat        <- "DMA"           # Give the stratgey a name variable
+portfolio.st <- "portf"         # Portfolio name
+account.st   <- "accnt"         # Account name
+initEq       <- 100000          # this parameter is required to get pct equity rebalancing to work
 csvDir       <- "C:/Users/RJK/Documents/SpiderOak Hive/Financial/commodities_data" # Directory containing csv files
-xtsDates     <- "2006/"      # Variable for the point in time you want your prices series to line up from
+xtsDates     <- "2006/"        # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast <- seq(10, 200, by = 10)        #fast moving average period
-MAslow <- seq(20, 400, by = 20)        #slow moving average period
-atrMult <- 5
+MAfast  <- seq(20, 200, by = 20)        #fast moving average period
+MAslow  <- seq(50, 400, by = 50)        #slow moving average period
+atrMult <- seq(1, 5, by = 1)            #atr multiple to use
 
 # Strategy Functions
+# A function to set the risk for rebalancing based on the number of symbols. Overly long use length instead
 setRisk <- function(symlist){
   n = 0
   for (sym in symlist){
@@ -31,6 +32,7 @@ setRisk <- function(symlist){
   return(risk)
 }
 
+# Custom indicator to generate the threshold multiplier to set an ATR based stop.
 atrStopThresh <- function(HLC, n=14, atr_mult=2){
   ATR <- ATR(HLC = HLC, n)
   pctATR <- round((atr_mult*ATR$atr)/Cl(HLC),digits=5)
@@ -58,8 +60,8 @@ for (sym in symbol){
 }
 
 # if run previously, run this code from here down
-delete.paramset(portfolio.st,"DMA_OPT")
-rm.strat(portfolio.st)
+rm.strat(portfolio.st, silent = FALSE)
+rm.strat(account.st, silent = FALSE)
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
 initPortf(portfolio.st, symbols = symbol, initDate = "1995-01-01")
@@ -67,13 +69,15 @@ initAcct(account.st, portfolios = portfolio.st, initEq = initEq, initDate = "199
 initOrders(portfolio = portfolio.st, initDate = "1995-01-01")
 
 # define the strategy with a position limit to prevent multiple trades in a direction
-strategy(strat, store = TRUE)
 for (sym in symbol){
-  addPosLimit(strat, sym, timestamp="2000-01-01", maxpos=100, 
+  addPosLimit(portfolio = portfolio.st, sym, timestamp="2000-01-01", maxpos=100, 
               longlevels = 1, minpos=-100, shortlevels = 1)
 }
 
-# Add the indicators - slow and fast SMA
+# Define Strategy
+strategy(strat, store = TRUE)
+
+# Add the indicators - A fast moving average, a slow moving average and the custom indicator
 add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,1]),
                                                            n = MAfast), label = "nFast"
 )
@@ -82,38 +86,35 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
                                                            n = MAslow), label = "nSlow"
 )
 
-# Add the signals -  Go long on a cross of the close greater than the breakout band and close on a cross 
-# less than the close band. Signals reversed for a short.
-add.signal(strategy=strat,name='sigCrossover', arguments = 
-             list(columns=c("nFast", "nSlow"),relationship="gt"
-          ),
-  label='long'
+add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
+                                                                     n = 100, atr_mult=atrMult), label = "atrStopThresh"
 )
 
-add.signal(strategy=strat,name='sigCrossover',arguments = 
-             list(columns=c("nFast", "nSlow"),relationship="lt"
-          ),
-  label='short'
+# Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.
+add.signal(strategy=strat,name='sigCrossover', arguments = list(columns=c("nFast", "nSlow"),relationship="gt"
+),
+label='long'
 )
 
-# Add the rules - what trades to make on the signals giving using osMaxPos to limit positions.
+add.signal(strategy=strat,name='sigCrossover',arguments = list(columns=c("nFast", "nSlow"),relationship="lte"
+),
+label='short'
+)
+
+# Add the rules
 # a) Entry rules - enter on moving average cross, osMaxPos is the order function
-add.rule(strategy=strat,
-         name='ruleSignal',
+add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside='long', ordertype='market', 
                         orderqty=+100, osFUN='osMaxPos', replace=FALSE
          ),
-         type='enter',
-         label='EnterLONG'
+         type='enter', label='EnterLONG'
 )
 
-add.rule(strategy=strat,
-         name='ruleSignal',
+add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside='short', ordertype='market', 
                         orderqty=-100, osFUN='osMaxPos', replace=FALSE
          ),
-         type='enter',
-         label='EnterSHORT'
+         type='enter', label='EnterSHORT'
 )
 
 # b) Exit rules - Close on cross the other way
@@ -121,41 +122,35 @@ add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='long' , sigval=TRUE, orderside=NULL, ordertype='market',
                         orderqty="all", replace=TRUE, orderset = "ocolong"
          ),
-         type='exit',
-         label='ExitLONG'
+         type='exit', label='ExitLONG'
 )
 
 add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL , ordertype='market',
                         orderqty="all", replace=TRUE, orderset = "ocoshort"
          ),
-         type='exit',
-         label='ExitSHORT'
+         type='exit', label='ExitSHORT'
 )
 
-# c) Stoploss rules
-add.rule(strategy=strat,
-         name='ruleSignal',
+# c) Stoploss rules using ordersets and ATR based threshold, not enabled by default
+add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
                         tmult=TRUE, threshold=quote("atr.atrStopThresh")
          ),
-         type='chain', parent = "EnterLONG",
-         label='StopLONG',enabled = FALSE
+         type='chain', parent = "EnterLONG", label='StopLONG',enabled = FALSE
 )
 
-add.rule(strategy=strat,
-         name='ruleSignal',
+add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
                         tmult=TRUE, threshold=quote("atr.atrStopThresh")
          ),
-         type='chain', parent = "EnterSHORT",
-         label='StopSHORT',enabled = FALSE
+         type='chain', parent = "EnterSHORT", label='StopSHORT',enabled = FALSE
 )
 
 # Add distributions and constraints
-add.distribution(portfolio.st,
+add.distribution(strategy = strat,
                  paramset.label = "DMA_OPT",
                  component.type = "indicator",
                  component.label = "nFast",
@@ -163,7 +158,7 @@ add.distribution(portfolio.st,
                  label = "ma_fast"
 )
 
-add.distribution(portfolio.st,
+add.distribution(strategy = strat,
                  paramset.label = "DMA_OPT",
                  component.type = "indicator",
                  component.label = "nSlow",
@@ -171,17 +166,33 @@ add.distribution(portfolio.st,
                  label = "ma_slow"
 )
 
-add.distribution.constraint(portfolio.st,
+add.distribution(strategy = strat,
+                 paramset.label = "DMA_OPT",
+                 component.type = "indicator",
+                 component.label = "atrStopThresh",
+                 variable = list( atr_mult=atrMult ),
+                 label = "atr"
+)
+
+add.distribution.constraint(strategy = strat,
                             paramset.label = "DMA_OPT",
                             distribution.label.1 = "ma_fast",
                             distribution.label.2 = "ma_slow",
                             operator = "<",
                             label = "fastLTslow")
 
+# Enable Rules
+enable.rule(strat,type = "chain",label = "StopSHORT")
+enable.rule(strat,type = "chain",label = "StopLONG")
+
+# Register the cores for parralel procssing
 registerDoParallel(cores=detectCores())
+
+# Now apply the parameter sets for optimization
 out <- apply.paramset(strat, paramset.label = "DMA_OPT",
                       portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
 stats <- out$tradeStats
+
 wd <- getwd()
 csv_file <- paste(wd,"DMAopt2",".csv", sep="")
 out <- write.csv(stats,             # write to file
