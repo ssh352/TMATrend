@@ -3,12 +3,11 @@
 # moving average. Has a rebalancing rule that enables us to compare being 100% invested in this strategy to 
 # buy and hold. No leverage. Here the simple percentage multiple stop loss is replace with an ATR based stop
 # loss, which is implemented via a custom indicator. Single equity data from yahoo.
-# Optimization of all 3 strategy variables with paramsets is working! PARALLEL PROC NOT WORKING IN WINDOWS
-# BUT NOT ENOUGH RAM ON WINDOWS COMPUTER ANYWAY
+# Optimization of all 3 strategy variables with paramsets is working! parallel proc working in linux with doMC
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
-library(doParallel)       # For parrallel optimization
+library(doMC)             # For parrallel optimization
 library(rgl)              # Library to load 3D trade graphs
 library(reshape2)         # Library to load 3D trade graphs
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
@@ -21,7 +20,7 @@ account.st   <- "accnt"             # Account name
 initEq       <- 1000000               # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast  <- seq(10, 200, by = 10)        #fast moving average period
+MAfast  <- seq(20, 200, by = 20)        #fast moving average period
 MAslow  <- seq(20, 400, by = 20)        #slow moving average period
 atrMult <- seq(1, 5, by = 1)            #atr multiple to use
 
@@ -166,7 +165,7 @@ enable.rule(strat,type = "chain",label = "StopSHORT")
 enable.rule(strat,type = "chain",label = "StopLONG")
 
 # Register the cores for parralel procssing
-registerDoParallel(cores=detectCores())
+registerDoMC(cores=detectCores())
 
 # Now apply the parameter sets for optimization
 out <- apply.paramset(strat, paramset.label = "DMA_OPT",

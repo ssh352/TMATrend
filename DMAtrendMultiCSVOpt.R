@@ -2,8 +2,8 @@
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
-library(doParallel)       # For parrallel optimization
-library(rgl)              # Library to load 3D trade graphs
+library(doMC)       # For parrallel optimization
+#library(rgl)              # Library to load 3D trade graphs
 library(reshape2)         # Library to load 3D trade graphs
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
@@ -13,12 +13,12 @@ strat        <- "DMA"           # Give the stratgey a name variable
 portfolio.st <- "portf"         # Portfolio name
 account.st   <- "accnt"         # Account name
 initEq       <- 100000          # this parameter is required to get pct equity rebalancing to work
-csvDir       <- "C:/Users/RJK/Documents/SpiderOak Hive/Financial/commodities_data" # Directory containing csv files
+csvDir       <- "/home/rjk/Financial/commodities_data" # Directory containing csv files
 xtsDates     <- "2006/"        # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
 MAfast  <- seq(20, 200, by = 20)        #fast moving average period
-MAslow  <- seq(50, 400, by = 50)        #slow moving average period
+MAslow  <- seq(20, 400, by = 20)        #slow moving average period
 atrMult <- seq(1, 5, by = 1)            #atr multiple to use
 
 # Strategy Functions
@@ -62,6 +62,7 @@ for (sym in symbol){
 # if run previously, run this code from here down
 rm.strat(portfolio.st, silent = FALSE)
 rm.strat(account.st, silent = FALSE)
+delete.paramset(strategy = strat,"DMA_OPT")
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
 initPortf(portfolio.st, symbols = symbol, initDate = "1995-01-01")
@@ -87,7 +88,7 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
 )
 
 add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
-                                                                     n = 100, atr_mult=atrMult), label = "atrStopThresh"
+                                                                     n = 14, atr_mult=atrMult), label = "atrStopThresh"
 )
 
 # Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.
@@ -186,7 +187,7 @@ enable.rule(strat,type = "chain",label = "StopSHORT")
 enable.rule(strat,type = "chain",label = "StopLONG")
 
 # Register the cores for parralel procssing
-registerDoParallel(cores=detectCores())
+registerDoMC(cores=detectCores())
 
 # Now apply the parameter sets for optimization
 out <- apply.paramset(strat, paramset.label = "DMA_OPT",
