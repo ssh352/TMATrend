@@ -14,13 +14,14 @@ strat        <- "DMA"           # Give the stratgey a name variable
 portfolio.st <- "portf"         # Portfolio name
 account.st   <- "accnt"         # Account name
 initEq       <- 100000          # this parameter is required to get pct equity rebalancing to work
-csvDir       <- "C:/Users/RJK/Documents/SpiderOak Hive/Financial/commodities_data" # Directory containing csv files
+csvDir       <- "/home/rjk/Financial/commodities_data" # Directory containing csv files
 xtsDates     <- "2006/"        # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
 MAfast  <- 50
-MAslow  <- 200
+MAslow  <- 100
 atrMult <- 5
+riskpct <- 0.02
 
 # Strategy Functions
 # A function to set the risk for rebalancing based on the number of symbols. Overly long use length instead
@@ -38,6 +39,30 @@ atrStopThresh <- function(HLC, n=14, atr_mult=2){
   ATR <- ATR(HLC = HLC, n)
   pctATR <- (atr_mult*ATR$atr)/Cl(HLC)
   pctATR
+}
+
+# Function to size order according to account balance, percentage risk desired and volatility (ATR)
+# use a built in order size function instead to not utilize this functionality
+osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, acct = account.st, portfolio = portfolio, ...){
+  # First set a multiplier to get order in the correct sign for short or long
+  if(orderqty<0){
+    sign <- -1
+  }else{
+    sign <- 1
+  }
+  
+  # get account equity
+  updatePortf(Portfolio = portfolio)
+  updateAcct(name = acct)
+  updateEndEq(Account = acct)
+  account_eq <- getEndEq(Account = acct,Date = timestamp)
+  
+  # determine volatility adjusted position sizing 
+  orderqty <- (account_eq * riskpct)/((data[timestamp]$atr.atrStopThresh)*(Cl(data[timestamp])))
+  
+  # round down, get as a number of correct sign and return
+  orderqty <- (as.numeric(floor(orderqty)))*sign
+  orderqty
 }
 
 #Symbol Setup
@@ -88,7 +113,7 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
 )
 
 add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
-                                                                     n = 14, atr_mult=atrMult), label = "atrStopThresh"
+                                                                     n = 20, atr_mult=atrMult), label = "atrStopThresh"
 )
 
 # Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.
@@ -109,7 +134,7 @@ add.signal(strategy=strat,name='sigCrossover',arguments =
 add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside='long', ordertype='market', 
-                        orderqty=+100, osFUN='osMaxPos', replace=FALSE
+                        orderqty=+100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter',
          label='EnterLONG'
@@ -118,7 +143,7 @@ add.rule(strategy=strat,
 add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside='short', ordertype='market', 
-                        orderqty=-100, osFUN='osMaxPos', replace=FALSE
+                        orderqty=-100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter',
          label='EnterSHORT'
@@ -162,7 +187,6 @@ add.rule(strategy=strat,
          label='StopSHORT',enabled = FALSE
 )
 
-
 # Percentage Equity rebalancing rule
 add.rule(strat, 'rulePctEquity',
          arguments=list(rebalance_on='months',
@@ -177,7 +201,7 @@ enable.rule(strat,type = "chain",label = "StopLONG")
 enable.rule(strat,type = "chain",label = "StopSHORT")
 
 # Apply the strategy assigning the output to a variable out
-out <- applyStrategy.rebalancing(strategy=strat , portfolios=portfolio.st)
+out <- applyStrategy(strategy=strat , portfolios=portfolio.st)
 updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio, acct and endeq
 updateAcct(name = account.st)
 updateEndEq(account.st)
@@ -193,6 +217,7 @@ stats <- tradeStats(portfolio.st)
 #plot the returns vs buy and hold
 eq1 <- getAccount(account.st)$summary$End.Eq
 rt1 <- Return.calculate(eq1,"log")
+getSymbols("^GSPC", from = '1995-01-01')
 rt2 <- periodReturn(GSPC, period = "daily")
 returns <- cbind(rt1,rt2)
 colnames(returns) <- c("DMA","SP500")

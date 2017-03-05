@@ -2,14 +2,14 @@
 # moving avergae is above the slow moving average or b) short if the fast moving average is below the slow 
 # moving average. Has a rebalancing rule that enables us to compare being 100% invested in this strategy to 
 # buy and hold. No leverage. Here the simple percentage multiple stop loss is replace with an ATR based stop
-# loss, which is implemented via a custom indicator. Single equity data from yahoo.
-# Optimization of all 3 strategy variables with paramsets is working! parallel proc working in linux with doMC
+# loss, which is implemented via a custom indicator. Single equity data from yahoo. ATR variable stop loss
+# Optimization of all 3 strategy variables with paramsets is working. parallel proc working in linux with doMC
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
 library(doMC)             # For parrallel optimization
-library(rgl)              # Library to load 3D trade graphs
-library(reshape2)         # Library to load 3D trade graphs
+#library(rgl)              # Library to load 3D trade graphs
+#library(reshape2)         # Library to load 3D trade graphs
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
@@ -17,12 +17,13 @@ Sys.setenv(TZ='UTC')
 strat        <- "DMA"               # Give the stratgey a name variable
 portfolio.st <- "portf"             # Portfolio name
 account.st   <- "accnt"             # Account name
-initEq       <- 1000000               # this parameter is required to get pct equity rebalancing to work
+initEq       <- 1000000             # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast  <- seq(20, 200, by = 20)        #fast moving average period
-MAslow  <- seq(20, 400, by = 20)        #slow moving average period
-atrMult <- seq(1, 5, by = 1)            #atr multiple to use
+MAfast  <- seq(20, 200, by = 20)        # fast moving average period
+MAslow  <- seq(20, 400, by = 20)        # slow moving average period
+atrMult <- seq(1, 5, by = 1)            # atr multiple to use
+riskpct <- 0.02                         # amount of account to risk   
 
 # Strategy Functions
 # Custom indicator to generate the threshold multiplier to set an ATR based stop.
@@ -30,6 +31,29 @@ atrStopThresh <- function(HLC, n=14, atr_mult=2){
   ATR <- ATR(HLC = HLC, n)
   pctATR <- (atr_mult*ATR$atr)/Cl(HLC)
   pctATR
+}
+
+# Function to size order according to account balance, percentage risk desired and volatility (ATR)
+# use a built in order size function instead to not utilize this functionality
+osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, acct = account.st, portfolio = portfolio, ...){
+  # First set a multiplier to get order in the correct sign for short or long
+  if(orderqty<0){
+    sign <- -1
+  }else{
+    sign <- 1
+  }
+  # get account equity
+  updatePortf(Portfolio = portfolio)
+  updateAcct(name = acct)
+  updateEndEq(Account = acct)
+  account_eq <- getEndEq(Account = acct,Date = timestamp)
+  
+  # determine volatility adjusted position sizing 
+  orderqty <- (account_eq * riskpct)/((data[timestamp]$atr.atrStopThresh)*(Cl(data[timestamp])))
+  
+  # round down, get as a number of correct sign and return
+  orderqty <- (as.numeric(floor(orderqty)))*sign
+  orderqty
 }
 
 # Symbols etc
@@ -43,6 +67,7 @@ getSymbols("^GSPC", from = '1995-01-01')
 # if run previously, run this code from here down
 rm.strat(portfolio.st, silent = FALSE)
 rm.strat(account.st, silent = FALSE)
+delete.paramset(strategy = strat, "DMA_OPT")
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
 initPortf(portfolio.st, symbols = symbol, initDate = "1995-01-01")
@@ -84,14 +109,14 @@ add.signal(strategy=strat,name='sigCrossover',arguments = list(columns=c("nFast"
 # a) Entry rules - enter on moving average cross, osMaxPos is the order function
 add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside='long', ordertype='market', 
-                        orderqty=+100, osFUN='osMaxPos', replace=FALSE
+                        orderqty=+100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter', label='EnterLONG'
 )
 
 add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside='short', ordertype='market', 
-                        orderqty=-100, osFUN='osMaxPos', replace=FALSE
+                        orderqty=-100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter', label='EnterSHORT'
 )
@@ -169,7 +194,7 @@ registerDoMC(cores=detectCores())
 
 # Now apply the parameter sets for optimization
 out <- apply.paramset(strat, paramset.label = "DMA_OPT",
-                      portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
+                      portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE, audit = globalenv())
 stats <- out$tradeStats
 
 # A loop to investigate the parameters via a 3D graph
