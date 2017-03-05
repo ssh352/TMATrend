@@ -20,17 +20,9 @@ xtsDates     <- "2006/"        # Variable for the point in time you want your pr
 MAfast  <- seq(20, 200, by = 20)        #fast moving average period
 MAslow  <- seq(20, 400, by = 20)        #slow moving average period
 atrMult <- seq(1, 5, by = 1)            #atr multiple to use
+riskpct <- 0.02
 
 # Strategy Functions
-# A function to set the risk for rebalancing based on the number of symbols. Overly long use length instead
-setRisk <- function(symlist){
-  n = 0
-  for (sym in symlist){
-    n = n+1
-  }
-  risk <- round(1/n, digits = 2)
-  return(risk)
-}
 
 # Custom indicator to generate the threshold multiplier to set an ATR based stop.
 atrStopThresh <- function(HLC, n=14, atr_mult=2){
@@ -39,12 +31,35 @@ atrStopThresh <- function(HLC, n=14, atr_mult=2){
   pctATR
 }
 
+# Function to size order according to account balance, percentage risk desired and volatility (ATR)
+# use a built in order size function instead to not utilize this functionality
+osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, acct = account.st, portfolio = portfolio, ...){
+  # First set a multiplier to get order in the correct sign for short or long
+  if(orderqty<0){
+    sign <- -1
+  }else{
+    sign <- 1
+  }
+  
+  # get account equity
+  updatePortf(Portfolio = portfolio)
+  updateAcct(name = acct)
+  updateEndEq(Account = acct)
+  account_eq <- getEndEq(Account = acct,Date = timestamp)
+  
+  # determine volatility adjusted position sizing 
+  orderqty <- (account_eq * riskpct)/((data[timestamp]$atr.atrStopThresh)*(Cl(data[timestamp])))
+  
+  # round down, get as a number of correct sign and return
+  orderqty <- (as.numeric(floor(orderqty)))*sign
+  orderqty
+}
+
 #Symbol Setup
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
 currency('USD')                                                        # set USD as a base currency
 symbol <- c("LSU","RR","CO","NG","OJ","LB","HG","LC","CT","CC","KC")   # Universe selection
-risk <- setRisk(symbol)                                                # set the risk for rebalancing using the function
 
 for (sym in symbol){
   future(sym, currency = "USD", multiplier = 1)
@@ -88,7 +103,7 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
 )
 
 add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
-                                                                     n = 14, atr_mult=atrMult), label = "atrStopThresh"
+                                                                     n = 20, atr_mult=atrMult), label = "atrStopThresh"
 )
 
 # Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.
@@ -106,14 +121,14 @@ label='short'
 # a) Entry rules - enter on moving average cross, osMaxPos is the order function
 add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside='long', ordertype='market', 
-                        orderqty=+100, osFUN='osMaxPos', replace=FALSE
+                        orderqty=+100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter', label='EnterLONG'
 )
 
 add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside='short', ordertype='market', 
-                        orderqty=-100, osFUN='osMaxPos', replace=FALSE
+                        orderqty=-100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter', label='EnterSHORT'
 )

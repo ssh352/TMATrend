@@ -2,7 +2,7 @@
 # moving avergae is above the slow moving average or b) short if the fast moving average is below the slow 
 # moving average. Has a rebalancing rule that enables us to compare being 100% invested in this strategy to 
 # buy and hold. No leverage. Here the simple percentage multiple stop loss is replace with an ATR based stop
-# loss, which is implemented via a custom indicator. Single equity data from yahoo. Working.
+# loss, which is implemented via a custom indicator. Single equity data from yahoo. ATR based order size function
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
@@ -13,19 +13,44 @@ Sys.setenv(TZ='UTC')
 strat        <- "DMA"               # Give the stratgey a name variable
 portfolio.st <- "portf"             # Portfolio name
 account.st   <- "accnt"             # Account name
-initEq       <- 10000               # this parameter is required to get pct equity rebalancing to work
+initEq       <- 100000               # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast  <- 10
-MAslow  <- 180
-atrMult <- 5
+MAfast  <- 40
+MAslow  <- 260
+atrMult <- 1
+riskpct <- 0.02
 
 # Strategy Functions
 # Custom indicator to generate the threshold multiplier to set an ATR based stop.
-atrStopThresh <- function(HLC, n=14, atr_mult=2){
+atrStopThresh <- function(HLC, n=20, atr_mult=2){
   ATR <- ATR(HLC = HLC, n)
   pctATR <- (atr_mult*ATR$atr)/Cl(HLC)
   pctATR
+}
+
+# A Function to size the order based on the ATR, use A built in order size function
+# instead to not utilize this functionality
+osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, acct = account.st, portfolio = portfolio, ...){
+  # First set a multiplier to get order in the correct sign for short or long
+  if(orderqty<0){
+    sign <- -1
+  }else{
+    sign <- 1
+  }
+  
+  # get updated account equity
+  updatePortf(Portfolio = portfolio)
+  updateAcct(name = acct)
+  updateEndEq(Account = acct)
+  account_eq <- getEndEq(Account = acct,Date = timestamp)
+  
+  # determine volatility adjusted position sizing 
+  orderqty <- (account_eq * riskpct)/((data[timestamp]$atr.atrStopThresh)*(Cl(data[timestamp])))
+  
+  # round down, get as a number of correct sign and return
+  orderqty <- (as.numeric(floor(orderqty)))*sign
+  orderqty
 }
 
 # Symbols etc
@@ -62,7 +87,7 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
 )
 
 add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
-                                                           n = 14, atr_mult=atrMult), label = "atrStopThresh"
+                                                           n = 20, atr_mult=atrMult), label = "atrStopThresh"
 )
 
 # Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.
@@ -83,7 +108,7 @@ add.signal(strategy=strat,name='sigCrossover',arguments =
 add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside='long', ordertype='market', 
-                         orderqty=+100, osFUN='osMaxPos', replace=FALSE
+                         orderqty=+100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter',
          label='EnterLONG'
@@ -92,7 +117,7 @@ add.rule(strategy=strat,
 add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside='short', ordertype='market', 
-                        orderqty=-100, osFUN='osMaxPos', replace=FALSE
+                        orderqty=-100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter',
          label='EnterSHORT'
@@ -148,7 +173,7 @@ add.rule(strat, 'rulePctEquity',
 
 enable.rule(strat,type = "chain",label = "StopLONG")
 enable.rule(strat,type = "chain",label = "StopSHORT")
-out <- applyStrategy.rebalancing(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
+out <- applyStrategy(strategy=strat , portfolios=portfolio.st) # Attempt the strategy
 updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio
 updateAcct(name = account.st)
 updateEndEq(account.st)
@@ -159,7 +184,7 @@ chart.Posn(Portfolio = portfolio.st, Symbol = symbol,
            Dates = "1995-05::2017-01")          # Chart the position
 stats <- tradeStats(portfolio.st)
 OB <- get.orderbook(portfolio.st)
-orders <- OB$DMA1EQ$GSPC
+orders <- OB$portf$GSPC
 
 #plot the returns vs buy and hold
 eq1 <- getAccount(account.st)$summary$End.Eq
