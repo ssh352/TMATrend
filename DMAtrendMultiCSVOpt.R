@@ -17,10 +17,10 @@ csvDir       <- "/home/rjk/Financial/commodities_data" # Directory containing cs
 xtsDates     <- "2006/"        # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast  <- seq(20, 200, by = 20)        #fast moving average period
-MAslow  <- seq(20, 400, by = 20)        #slow moving average period
-atrMult <- seq(1, 5, by = 1)            #atr multiple to use
-riskpct <- 0.02
+MAfast  <- seq(20, 100, by = 10)        #fast moving average period
+MAslow  <- seq(20, 150, by = 10)        #slow moving average period
+atrMult <- seq(1, 10, by = 1)           #atr multiple to use
+riskpct <- 0.01
 
 # Strategy Functions
 
@@ -58,8 +58,9 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
 #Symbol Setup
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
-currency('USD')                                                        # set USD as a base currency
-symbol <- c("LSU","RR","CO","NG","OJ","LB","HG","LC","CT","CC","KC")   # Universe selection
+currency('USD')                                                                    # set USD as a base currency
+symbol <- c("LSU","RR","CO","NG","OJ","LB","HG",
+            "LC","CT","CC","KC","WTI","XAU")   # Universe selection
 
 for (sym in symbol){
   future(sym, currency = "USD", multiplier = 1)
@@ -207,13 +208,19 @@ registerDoMC(cores=detectCores())
 # Now apply the parameter sets for optimization
 out <- apply.paramset(strat, paramset.label = "DMA_OPT",
                       portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
+
 stats <- out$tradeStats
 
-wd <- getwd()
-csv_file <- paste(wd,"DMAopt2",".csv", sep="")
 out <- write.csv(stats,             # write to file
-                 file = csv_file,
+                 file = paste(getwd(),"/DMAopt",as.character(Sys.Date()),".csv", sep=""),
                  quote = FALSE, row.names = TRUE)
+
+# If you've done this on a  previous date
+date <- "2017-04-01"
+stats <- read.csv(paste(getwd(),"/DMAopt",date,".csv", sep=""))
+stats <- stats[,-1]
+
+portfolio_avg <- aggregate(stats[,c(1,2,3,6:33)],list(stats$Portfolio), mean)
 
 # A loop to investigate the parameters via a 3D graph
 for (sym in symbol){
@@ -227,9 +234,11 @@ for (sym in symbol){
 }
 
 # Or use a heatmap to look at one parameter at a time
-for (sym in symbol){
-  dfName <- paste(sym,"stats", sep = "")
-  statSubsetDf <- subset(stats, Symbol == sym)
+
+
+for (Atr in atrMult){
+  dfName <- paste(Atr,"stats", sep = "")
+  statSubsetDf <- subset(portfolio_avg, atr == Atr)
   assign(dfName, statSubsetDf)
   z <- tapply(X=statSubsetDf$Net.Trading.PL, 
               INDEX = list(statSubsetDf$ma_fast,statSubsetDf$ma_slow), 
@@ -237,7 +246,9 @@ for (sym in symbol){
   x <- as.numeric(rownames(z))
   y <- as.numeric(colnames(z))
   filled.contour(x=x,y=y,z=z,color=heat.colors,xlab="ma_fast",ylab="ma_slow")
-  title(sym)
+  title(Atr)
 }
+
+portfolio_avg <- aggregate(stats[,c(1,2,3,6:33)],list(stats$Portfolio), mean)
 
 Sys.setenv(TZ=ttz)                                             # Return to original time zone

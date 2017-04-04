@@ -1,8 +1,8 @@
-# This strategy uses a simple moving average crossover (MAfast and MASlow), to either a) go long if the fast
-# moving avergae is above the slow moving average or b) short if the fast moving average is below the slow 
-# moving average. Has a rebalancing rule that enables us to compare being 100% invested in this strategy to 
-# buy and hold. No leverage. Here the simple percentage multiple stop loss is replace with an ATR based stop
-# loss, which is implemented via a custom indicator. Single equity data from yahoo. ATR based order size function
+# This strategy uses a dual donchian channels (breakout and close), to either a) go long if the close
+# is above the breakout channel or b) short if the closee is below the breakout channel
+# There is a rebalancing rule that enables us to compare being 100% invested in this strategy to 
+# buy and hold. An ATR based stop is used which is implemented via a custom indicator. Single equity data from yahoo.
+# ATR based order size function
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
@@ -16,9 +16,9 @@ account.st   <- "accnt"             # Account name
 initEq       <- 100000               # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast  <- 40
-MAslow  <- 260
-atrMult <- 1
+MAfast  <- 20
+MAslow  <- 200
+atrMult <- 5
 riskpct <- 0.02
 
 # Strategy Functions

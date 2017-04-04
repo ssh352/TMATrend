@@ -18,9 +18,9 @@ csvDir       <- "/home/rjk/Financial/commodities_data/daily2006" # Directory con
 xtsDates     <- "2006/"        # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast  <- 140
-MAslow  <- 260
-atrMult <- 1
+MAfast  <- 20
+MAslow  <- 40
+atrMult <- 9
 riskpct <- 0.01
 
 # Strategy Functions
@@ -69,7 +69,8 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
 currency('USD')                                         # set USD as a base currency
-symbol <- c("LSU","RR","CO","NG","OJ","LB","HG",
+symbol <- c("LSU","RR","CO","NG","OJ",#"LB",
+            #"HG",
             "LC","CT","KC","CC","WTI", "XAU")   # Universe selection
 risk <- setRisk(symbol)                                 # set the risk for rebalancing using the function
 
@@ -210,7 +211,7 @@ updateEndEq(account.st)
 # Plot the charts fo each symbol
 for (sym in symbol){
   chart.Posn(Portfolio = portfolio.st, Symbol = sym, 
-             TA=list("add_SMA(n=140)","add_SMA(n=260)"),
+             TA=list("add_SMA(n=20)","add_SMA(n=40)"),
              Dates = "2006-01::2017-04") # Chart the position 
 }
 stats <- tradeStats(portfolio.st)
