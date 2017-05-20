@@ -2,8 +2,8 @@
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
-library(doMC)       # For parrallel optimization
-#library(rgl)              # Library to load 3D trade graphs
+library(doMC)             # For parrallel optimization
+#library(rgl)             # Library to load 3D trade graphs
 library(reshape2)         # Library to load 3D trade graphs
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')

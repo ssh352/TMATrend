@@ -1,11 +1,10 @@
-# This strategy uses a simple moving average crossover (MAfast and MASlow), to either a) go long if the fast
-# moving avergae is above the slow moving average or b) short if the fast moving average is below the slow 
-# moving average. Has a rebalancing rule that enables us to compare being 100% invested in this strategy to 
-# buy and hold. No leverage. Here the simple percentage multiple stop loss is replace with an ATR based stop
-# loss, which is implemented via a custom indicator. Multiple data from csv file. Working.
+# Template for Strategy Development - SP500 testing
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
+library(doMC)       # For parrallel optimization
+#library(rgl)              # Library to load 3D trade graphs
+library(reshape2)         # Library to load 3D trade graphs
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
@@ -18,26 +17,17 @@ csvDir       <- "/home/rjk/Financial/forexData/AXI/Daily" # Directory containing
 xtsDates     <- "2006/"        # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast  <- 20
-MAslow  <- 30
-atrMult <- 5
+MAfast  <- seq(20, 100, by = 10)        #fast moving average period
+MAslow  <- seq(20, 150, by = 10)        #slow moving average period
+atrMult <- seq(1, 10, by = 1)           #atr multiple to use
 riskpct <- 0.01
 
 # Strategy Functions
-# A function to set the risk for rebalancing based on the number of symbols. Overly long use length instead
-setRisk <- function(symlist){
-  n = 0
-  for (sym in symlist){
-    n = n+1
-  }
-  risk <- round(1/n, digits = 2)
-  return(risk)
-}
 
 # Custom indicator to generate the threshold multiplier to set an ATR based stop.
 atrStopThresh <- function(HLC, n=14, atr_mult=2){
   ATR <- ATR(HLC = HLC, n)
-  pctATR <- (atr_mult*ATR$atr)/Cl(HLC)
+  pctATR <- round((atr_mult*ATR$atr)/Cl(HLC),digits=5)
   pctATR
 }
 
@@ -75,8 +65,6 @@ for(sym in symbol){
   exchange_rate(primary_id=sym, tick_size=0.0001)
 }
 
-risk <- setRisk(symbol)                                 # set the risk for rebalancing using the function
-
 getSymbols(Symbols = symbol, verbose = TRUE, warnings = TRUE, 
            src = 'csv', dir= csvDir, extension='csv', header = TRUE, 
            stingsAsFactors = FALSE)
@@ -89,6 +77,7 @@ for (sym in symbol){
 # if run previously, run this code from here down
 rm.strat(portfolio.st, silent = FALSE)
 rm.strat(account.st, silent = FALSE)
+delete.paramset(strategy = strat,"DMA_OPT")
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
 initPortf(portfolio.st, symbols = symbol, initDate = "1995-01-01")
@@ -118,36 +107,30 @@ add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(m
 )
 
 # Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.
-add.signal(strategy=strat,name='sigCrossover', arguments = 
-             list(columns=c("nFast", "nSlow"),relationship="gt"
-          ),
-  label='long'
+add.signal(strategy=strat,name='sigCrossover', arguments = list(columns=c("nFast", "nSlow"),relationship="gt"
+),
+label='long'
 )
 
-add.signal(strategy=strat,name='sigCrossover',arguments = 
-             list(columns=c("nFast", "nSlow"),relationship="lt"
-          ),
-  label='short'
+add.signal(strategy=strat,name='sigCrossover',arguments = list(columns=c("nFast", "nSlow"),relationship="lte"
+),
+label='short'
 )
 
 # Add the rules
 # a) Entry rules - enter on moving average cross, osMaxPos is the order function
-add.rule(strategy=strat,
-         name='ruleSignal',
+add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside='long', ordertype='market', 
                         orderqty=+100, osFUN='osATRsize', replace=FALSE
          ),
-         type='enter',
-         label='EnterLONG'
+         type='enter', label='EnterLONG'
 )
 
-add.rule(strategy=strat,
-         name='ruleSignal',
+add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside='short', ordertype='market', 
                         orderqty=-100, osFUN='osATRsize', replace=FALSE
          ),
-         type='enter',
-         label='EnterSHORT'
+         type='enter', label='EnterSHORT'
 )
 
 # b) Exit rules - Close on cross the other way
@@ -155,74 +138,121 @@ add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='long' , sigval=TRUE, orderside=NULL, ordertype='market',
                         orderqty="all", replace=TRUE, orderset = "ocolong"
          ),
-         type='exit',
-         label='ExitLONG'
+         type='exit', label='ExitLONG'
 )
 
 add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL , ordertype='market',
                         orderqty="all", replace=TRUE, orderset = "ocoshort"
          ),
-         type='exit',
-         label='ExitSHORT'
+         type='exit', label='ExitSHORT'
 )
 
 # c) Stoploss rules using ordersets and ATR based threshold, not enabled by default
-add.rule(strategy=strat,
-         name='ruleSignal',
+add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
-                        tmult=TRUE, threshold="atr.atrStopThresh"
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
          ),
-         type='chain', parent = "EnterLONG",
-         label='StopLONG',enabled = FALSE
+         type='chain', parent = "EnterLONG", label='StopLONG',enabled = FALSE
 )
 
-add.rule(strategy=strat,
-         name='ruleSignal',
+add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
-                        tmult=TRUE, threshold="atr.atrStopThresh"
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
          ),
-         type='chain', parent = "EnterSHORT",
-         label='StopSHORT',enabled = FALSE
+         type='chain', parent = "EnterSHORT", label='StopSHORT',enabled = FALSE
 )
 
-# Percentage Equity rebalancing rule
-add.rule(strat, 'rulePctEquity',
-         arguments=list(rebalance_on='months',
-                        trade.percent=risk,
-                        refprice=quote(last(getPrice(mktdata)[paste('::',curIndex,sep='')])[,1]),
-                        digits=0
-         ),
-         type='rebalance',
-         label='rebalance')
+# Add distributions and constraints
+add.distribution(strategy = strat,
+                 paramset.label = "DMA_OPT",
+                 component.type = "indicator",
+                 component.label = "nFast",
+                 variable = list( n = MAfast ),
+                 label = "ma_fast"
+)
 
-enable.rule(strat,type = "chain",label = "StopLONG")
+add.distribution(strategy = strat,
+                 paramset.label = "DMA_OPT",
+                 component.type = "indicator",
+                 component.label = "nSlow",
+                 variable = list( n = MAslow ),
+                 label = "ma_slow"
+)
+
+add.distribution(strategy = strat,
+                 paramset.label = "DMA_OPT",
+                 component.type = "indicator",
+                 component.label = "atrStopThresh",
+                 variable = list( atr_mult=atrMult ),
+                 label = "atr"
+)
+
+add.distribution.constraint(strategy = strat,
+                            paramset.label = "DMA_OPT",
+                            distribution.label.1 = "ma_fast",
+                            distribution.label.2 = "ma_slow",
+                            operator = "<",
+                            label = "fastLTslow")
+
+# Enable Rules
 enable.rule(strat,type = "chain",label = "StopSHORT")
+enable.rule(strat,type = "chain",label = "StopLONG")
 
-# Apply the strategy assigning the output to a variable out
-out <- applyStrategy(strategy=strat , portfolios=portfolio.st)
-updatePortf(Portfolio = portfolio.st)                                      # Update the portfolio, acct and endeq
-updateAcct(name = account.st)
-updateEndEq(account.st)
+# Register the cores for parralel procssing
+registerDoMC(cores=detectCores())
 
-# Plot the charts fo each symbol
+# Now apply the parameter sets for optimization
+out <- apply.paramset(strat, paramset.label = "DMA_OPT",
+                      portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
+
+stats <- out$tradeStats
+
+out <- write.csv(stats,             # write to file
+                 file = paste(getwd(),"/DMACurrOpt",as.character(Sys.Date()),".csv", sep=""),
+                 quote = FALSE, row.names = TRUE)
+
+# If you've done this on a  previous date
+date <- "2017-04-01"
+stats <- read.csv(paste(getwd(),"/DMACurrOpt",date,".csv", sep=""))
+stats <- stats[,-1]
+
+portfolio_avg <- aggregate(stats[,c(1,2,3,6:33)],list(stats$Portfolio), mean)
+
+# A loop to investigate the parameters via a 3D graph
 for (sym in symbol){
-  chart.Posn(Portfolio = portfolio.st, Symbol = sym, 
-             TA=list("add_SMA(n=20)","add_SMA(n=40)"),
-             Dates = "2006-01::2017-04") # Chart the position 
+  dfName <- paste(sym,"stats", sep = "")
+  statSubsetDf <- subset(stats, Symbol == sym)
+  assign(dfName, statSubsetDf)
+  tradeGraphs(stats = statSubsetDf, 
+              free.params=c("ma_fast","ma_slow"),
+              statistics = c("Ann.Sharpe","Profit.To.Max.Draw","Min.Equity"), 
+              title = sym)
 }
-stats <- tradeStats(portfolio.st)
 
-#plot the returns vs buy and hold
-eq1 <- getAccount(account.st)$summary$End.Eq
-rt1 <- Return.calculate(eq1,"log")
-getSymbols("^GSPC", from = '1995-01-01')
-rt2 <- periodReturn(GSPC, period = "daily")
-returns <- cbind(rt1,rt2)
-colnames(returns) <- c("DMA","SP500")
-chart.CumReturns(returns,colorset=c(2,4),legend.loc="topleft",
-                 main="Moving Average Crossover to Benchmark Comparison",ylab="cum return",xlab="",
-                 minor.ticks=FALSE)
+# Or use a heatmap to look at one parameter at a time
+for (Atr in atrMult){
+  dfName <- paste(Atr,"stats", sep = "")
+  statSubsetDf <- subset(portfolio_avg, atr == Atr)
+  assign(dfName, statSubsetDf)
+  z <- tapply(X=statSubsetDf$Num.Trades, 
+              INDEX = list(statSubsetDf$ma_fast,statSubsetDf$ma_slow), 
+              FUN = median)
+  x <- as.numeric(rownames(z))
+  y <- as.numeric(colnames(z))
+  filled.contour(x=x,y=y,z=z,color=heat.colors,xlab="ma_fast",ylab="ma_slow")
+  title(Atr)
+}
+
+for (sym in symbol){
+  dfName <- paste(sym,"stats", sep = "")
+  statSubsetDf <- subset(stats, Symbol == sym)
+  statSubsetDf <- subset(statSubsetDf, ma_slow <= 100)
+  hist(statSubsetDf$Net.Trading.PL, breaks = 100, main = paste(dfName,"mean =",mean(statSubsetDf$Net.Trading.PL),sep = " "))
+  assign(dfName, statSubsetDf)
+  
+}
+
 Sys.setenv(TZ=ttz)                                             # Return to original time zone

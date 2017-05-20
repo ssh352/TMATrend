@@ -1,0 +1,67 @@
+---
+title: "DMA_Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## DMA Analysis
+
+This is a document that outlines the method that I use to analyze the output from a quantstrat backtest that uses the paramset function to
+test multiple parameters for multiple symbols. It will load the data that was produced from .csv in the first instance as a dataframe called
+stats.
+
+```{r}
+date <- "2017-04-01"
+stats <- read.csv(paste(getwd(),"/DMAopt",date,".csv", sep=""))
+stats <- stats[,-1]
+symbols <- as.character(unique(stats$Symbol))
+library(ggplot2)
+```
+
+The first task is to identify the distribution of returns of the strategy over the paramter range tested.
+
+```{r}
+hist(stats$Net.Trading.PL, breaks =200,xlim = c(-100000,100000))
+```
+
+This first level of analysis would seem to suggest that the strategy is profitable overall, that is, is you traded every parameter combination that was tested with equal weighting you would come out marginally on top. The task now must be to eliminate parameter combinations in a non rendom fashion to produce data that will a) increase our confidence in the data we have obtained and b) increase average returns. Eventually, we may optimize each instrument, but only if we are clear about why we are doing this. So first let us have a look at some averages of the portfolios.
+
+```{r}
+portfolio_avg <- aggregate(stats[,c(1,2,3,6:33)],list(stats$Portfolio), mean)
+```
+
+Q1) What is the minimum number of trades that are aceptable for a back test?
+Some, admitedly cursory, reading of the internet has show that there is no clear answer given to this question that has gained 
+popular acceptance. Surely it cannot be number, say 30, as it will likely depend on the holding period of your trades and the time frame you are trading on. But this question must be tackled in some way, otherwise your data is going to be corrupted with data from sample with low amount of trades and give you spurious reults. Perhaps the way to go about answering this question in the first instance is to see how number of trades varies with the variables of fast moving average, slow moving average and ATR period. First we subset the data and plot the variation of number of trades with atr for each combination of moving averages. 
+
+```{r}
+fastMA <- as.numeric(unique(stats$ma_fast))
+slowMA <- as.numeric(unique(stats$ma_slow))
+for (sma in slowMA){
+  p <- ggplot()
+  for(fma in fastMA){
+    dfName <- as.character(paste(fma,sma,"stats",sep = ""))
+    subsdf <- subset(portfolio_avg, ma_fast == fma & ma_slow == sma)
+    assign(dfName,subsdf)
+    p <- p + geom_point(data=subsdf,aes(x=atr,y=Num.Trades))
+    }
+p
+plotName <- as.character(paste("av_stats",sma,sep=""))
+assign(plotName,p)
+}
+av_stats100
+```
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
