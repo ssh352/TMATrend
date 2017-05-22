@@ -38,21 +38,11 @@ Some, admitedly cursory, reading of the internet has show that there is no clear
 popular acceptance. Surely it cannot be number, say 30, as it will likely depend on the holding period of your trades and the time frame you are trading on. But this question must be tackled in some way, otherwise your data is going to be corrupted with data from sample with low amount of trades and give you spurious reults. Perhaps the way to go about answering this question in the first instance is to see how number of trades varies with the variables of fast moving average, slow moving average and ATR period. First we subset the data and plot the variation of number of trades with atr for each combination of moving averages. 
 
 ```{r}
-fastMA <- as.numeric(unique(stats$ma_fast))
-slowMA <- as.numeric(unique(stats$ma_slow))
-for (sma in slowMA){
-  p <- ggplot()
-  for(fma in fastMA){
-    dfName <- as.character(paste(fma,sma,"stats",sep = ""))
-    subsdf <- subset(portfolio_avg, ma_fast == fma & ma_slow == sma)
-    assign(dfName,subsdf)
-    p <- p + geom_point(data=subsdf,aes(x=atr,y=Num.Trades))
-    }
-p
-plotName <- as.character(paste("av_stats",sma,sep=""))
-assign(plotName,p)
-}
-av_stats100
+qplot(data = portfolio_avg,x=atr,y=Num.Trades,facets = .~ma_slow,color=ma_fast)
+
+```
+```{r}
+hist(subset(stats,ma_slow<80)$Net.Trading.PL,breaks =200,xlim = c(-100000,100000))
 ```
 
 

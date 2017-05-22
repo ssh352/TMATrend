@@ -53,6 +53,17 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
   orderqty
 }
 
+# Transaction Fee Function - Returns a numeric Fee which is a percetage multiple of the tranaction total value 
+pctFee <- function(TxnQty,TxnPrice,Symbol){
+  feeMult <- 0.005
+  fee <- round(-1*(feeMult*abs(TxnPrice)*abs(TxnQty)),0)
+  return(fee)
+  
+  #multiplier <- 0.005
+  #fee <- round(multiplier*abs(TxnQty)*abs(TxnPrice),digits = 0)
+  #fee
+}
+
 # Symbols etc
 currency('USD')             # set USD as a base currency
 symbol <- "GSPC"            # Universe selection At this stage is only one symbol
@@ -60,6 +71,7 @@ symbol <- "GSPC"            # Universe selection At this stage is only one symbo
 # set the instument as a future and get the data from yahoo
 stock(symbol, currency = "USD", multiplier = 1)
 getSymbols("^GSPC", from = '1995-01-01')
+GSPC <- na.fill(GSPC,fill='extend')
 
 # if run previously, run this code from here down to the strategy definition before re-running
 rm.strat(portfolio.st, silent = FALSE)
@@ -126,7 +138,7 @@ add.rule(strategy=strat,
 # b) Exit rules - Close on cross the other way
 add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='long' , sigval=TRUE, orderside=NULL, ordertype='market',
-                        orderqty="all", replace=TRUE, orderset = "ocolong"
+                        orderqty="all", replace=TRUE, orderset = "ocolong",TxnFees = 'pctFee'
          ),
          type='exit',
          label='ExitLONG'
@@ -134,7 +146,7 @@ add.rule(strategy = strat, name='ruleSignal',
 
 add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL , ordertype='market',
-                        orderqty="all", replace=TRUE, orderset = "ocoshort"
+                        orderqty="all", replace=TRUE, orderset = "ocoshort",TxnFees = 'pctFee'
          ),
          type='exit',
          label='ExitSHORT'
@@ -145,7 +157,7 @@ add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
-                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh"),TxnFees = 'pctFee'
          ),
          type='chain', parent = "EnterLONG",
          label='StopLONG',enabled = FALSE
@@ -155,7 +167,7 @@ add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
-                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh"),TxnFees = 'pctFee'
          ),
          type='chain', parent = "EnterSHORT",
          label='StopSHORT',enabled = FALSE
