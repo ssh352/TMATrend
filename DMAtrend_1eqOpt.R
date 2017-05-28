@@ -4,6 +4,7 @@
 # buy and hold. No leverage. Here the simple percentage multiple stop loss is replace with an ATR based stop
 # loss, which is implemented via a custom indicator. Single equity data from yahoo. ATR variable stop loss
 # Optimization of all 3 strategy variables with paramsets is working. parallel proc working in linux with doMC
+# Transaction fees incorporated via a percentage based function
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
@@ -20,8 +21,8 @@ account.st   <- "accnt"             # Account name
 initEq       <- 10000             # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast  <- seq(20, 200, by = 20)        # fast moving average period
-MAslow  <- seq(20, 400, by = 20)        # slow moving average period
+MAfast  <- seq(20, 100, by = 20)        # fast moving average period
+MAslow  <- seq(20, 200, by = 20)        # slow moving average period
 atrMult <- seq(1, 5, by = 1)            # atr multiple to use
 riskpct <- 0.02                         # amount of account to risk   
 
@@ -56,6 +57,13 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
   orderqty
 }
 
+# Transaction Fee Function - Returns a numeric Fee which is a percetage multiple of the tranaction total value 
+pctFee <- function(TxnQty,TxnPrice,Symbol){
+  feeMult <- 0.0005
+  fee <- round(-1*(feeMult*abs(TxnPrice)*abs(TxnQty)),0)
+  return(fee)
+}
+
 # Symbols etc
 currency('USD')             # set USD as a base currency
 symbol <- "GSPC"            # Universe selection At this stage is only one symbol
@@ -63,6 +71,7 @@ symbol <- "GSPC"            # Universe selection At this stage is only one symbo
 # set the instument as a future and get the data from yahoo
 stock(symbol, currency = "USD", multiplier = 1)
 getSymbols("^GSPC", from = '1995-01-01')
+GSPC <- na.fill(GSPC,fill='extend')
 
 # if run previously, run this code from here down
 rm.strat(portfolio.st, silent = FALSE)
@@ -124,14 +133,14 @@ add.rule(strategy=strat, name='ruleSignal',
 # b) Exit rules - Close on cross the other way
 add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='long' , sigval=TRUE, orderside=NULL, ordertype='market',
-                        orderqty="all", replace=TRUE, orderset = "ocolong"
+                        orderqty="all", replace=TRUE, orderset = "ocolong",TxnFees = 'pctFee'
          ),
          type='exit', label='ExitLONG'
 )
 
 add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL , ordertype='market',
-                        orderqty="all", replace=TRUE, orderset = "ocoshort"
+                        orderqty="all", replace=TRUE, orderset = "ocoshort",TxnFees = 'pctFee'
          ),
          type='exit', label='ExitSHORT'
 )
@@ -140,7 +149,7 @@ add.rule(strategy = strat, name='ruleSignal',
 add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
-                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh"),TxnFees = 'pctFee'
          ),
          type='chain', parent = "EnterLONG", label='StopLONG',enabled = FALSE
 )
@@ -148,7 +157,7 @@ add.rule(strategy=strat, name='ruleSignal',
 add.rule(strategy=strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
-                        tmult=TRUE, threshold=quote("atr.atrStopThresh")
+                        tmult=TRUE, threshold=quote("atr.atrStopThresh"),TxnFees = 'pctFee'
          ),
          type='chain', parent = "EnterSHORT", label='StopSHORT',enabled = FALSE
 )

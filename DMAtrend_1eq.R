@@ -2,7 +2,7 @@
 # is above the breakout channel or b) short if the closee is below the breakout channel
 # There is a rebalancing rule that enables us to compare being 100% invested in this strategy to 
 # buy and hold. An ATR based stop is used which is implemented via a custom indicator. Single equity data from yahoo.
-# ATR based order size function
+# ATR based order size function and percentage fee function working as of 22/5/2017
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
@@ -58,10 +58,6 @@ pctFee <- function(TxnQty,TxnPrice,Symbol){
   feeMult <- 0.005
   fee <- round(-1*(feeMult*abs(TxnPrice)*abs(TxnQty)),0)
   return(fee)
-  
-  #multiplier <- 0.005
-  #fee <- round(multiplier*abs(TxnQty)*abs(TxnPrice),digits = 0)
-  #fee
 }
 
 # Symbols etc

@@ -18,9 +18,9 @@ xtsDates     <- "2006/"        # Variable for the point in time you want your pr
 
 # Strategy specific variables
 MAfast  <- seq(20, 100, by = 10)        #fast moving average period
-MAslow  <- seq(20, 150, by = 10)        #slow moving average period
-atrMult <- seq(1, 10, by = 1)           #atr multiple to use
-riskpct <- 0.01
+MAslow  <- seq(40, 100, by = 10)        #slow moving average period
+atrMult <- seq(2, 10, by = 1)           #atr multiple to use
+riskpct <- 0.02
 
 # Strategy Functions
 
@@ -66,12 +66,9 @@ pctFee <- function(TxnQty,TxnPrice,Symbol){
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
 currency('USD')                                                                    # set USD as a base currency
-symbol <- c("LSU","RR","CO","NG","OJ","LB","HG",
-            "LC","CT","CC","KC","WTI","XAU")   # Universe selection
+symbol <- "CC"   # Universe selection
 
-for (sym in symbol){
-  future(sym, currency = "USD", multiplier = 1)
-}
+future(symbol, currency = "USD", multiplier = 1)
 
 getSymbols(Symbols = symbol, verbose = TRUE, warnings = TRUE, 
            src = 'csv', dir= csvDir, extension='csv', header = TRUE, 
@@ -88,15 +85,14 @@ rm.strat(account.st, silent = FALSE)
 delete.paramset(strategy = strat,"DMA_OPT")
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
-initPortf(portfolio.st, symbols = symbol, initDate = "1995-01-01")
-initAcct(account.st, portfolios = portfolio.st, initEq = initEq, initDate = "1995-01-01")
-initOrders(portfolio = portfolio.st, initDate = "1995-01-01")
+initPortf(portfolio.st, symbols = symbol)
+initAcct(account.st, portfolios = portfolio.st, initEq = initEq)
+initOrders(portfolio = portfolio.st)
 
 # define the strategy with a position limit to prevent multiple trades in a direction
-for (sym in symbol){
-  addPosLimit(portfolio = portfolio.st, sym, timestamp="2000-01-01", maxpos=100, 
+
+addPosLimit(portfolio = portfolio.st, symbol, timestamp="2000-01-01", maxpos=100, 
               longlevels = 1, minpos=-100, shortlevels = 1)
-}
 
 # Define Strategy
 strategy(strat, store = TRUE)
@@ -215,6 +211,13 @@ registerDoMC(cores=detectCores())
 # Now apply the parameter sets for optimization
 out <- apply.paramset(strat, paramset.label = "DMA_OPT",
                       portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
+
+# Walk Forward Analysis
+results <- walk.forward(strategy.st=strat, paramset.label='DMA_OPT', portfolio.st=portfolio.st,
+  account.st=account.st, period='years', k.training=5, k.testing=2, nsamples=0,
+  obj.args = list(x = quote(tradeStats.list$Profit.To.Max.Draw)),audit.prefix='wfa',
+  anchored=FALSE, verbose=FALSE
+)
 
 stats <- out$tradeStats
 

@@ -18,9 +18,9 @@ csvDir       <- "/home/rjk/Financial/commodities_data/daily2006" # Directory con
 xtsDates     <- "2006/"        # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast  <- 140
-MAslow  <- 260
-atrMult <- 1
+MAfast  <- 50
+MAslow  <- 70
+atrMult <- 3
 riskpct <- 0.01
 
 # Strategy Functions
@@ -65,12 +65,19 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
   orderqty
 }
 
+# Transaction Fee Function - Returns a numeric Fee which is a percetage multiple of the tranaction total value 
+pctFee <- function(TxnQty,TxnPrice,Symbol){
+  feeMult <- 0.0005
+  fee <- round(-1*(feeMult*abs(TxnPrice)*abs(TxnQty)),0)
+  return(fee)
+}
+
 #Symbol Setup
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
 currency('USD')                                         # set USD as a base currency
-symbol <- c("LSU","RR","CO","NG","OJ","LB","HG",
-            "LC","CT","KC","CC","WTI", "XAU")   # Universe selection
+symbol <- "CC"#c("LSU","RR","CO","NG","OJ","LB","HG",
+            #"LC","CT","KC","CC","WTI", "XAU")   # Universe selection
 risk <- setRisk(symbol)                                 # set the risk for rebalancing using the function
 
 for (sym in symbol){
@@ -91,9 +98,9 @@ rm.strat(portfolio.st, silent = FALSE)
 rm.strat(account.st, silent = FALSE)
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
-initPortf(portfolio.st, symbols = symbol, initDate = "1995-01-01")
-initAcct(account.st, portfolios = portfolio.st, initEq = initEq, initDate = "1995-01-01")
-initOrders(portfolio = portfolio.st, initDate = "1995-01-01")
+initPortf(portfolio.st, symbols = symbol)
+initAcct(account.st, portfolios = portfolio.st, initEq = initEq)
+initOrders(portfolio = portfolio.st)
 
 # define the strategy with a position limit to prevent multiple trades in a direction
 for (sym in symbol){
@@ -153,7 +160,7 @@ add.rule(strategy=strat,
 # b) Exit rules - Close on cross the other way
 add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='long' , sigval=TRUE, orderside=NULL, ordertype='market',
-                        orderqty="all", replace=TRUE, orderset = "ocolong"
+                        orderqty="all", replace=TRUE, orderset = "ocolong",TxnFees = 'pctFee'
          ),
          type='exit',
          label='ExitLONG'
@@ -161,7 +168,7 @@ add.rule(strategy = strat, name='ruleSignal',
 
 add.rule(strategy = strat, name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL , ordertype='market',
-                        orderqty="all", replace=TRUE, orderset = "ocoshort"
+                        orderqty="all", replace=TRUE, orderset = "ocoshort",TxnFees = 'pctFee'
          ),
          type='exit',
          label='ExitSHORT'
@@ -172,7 +179,7 @@ add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
-                        tmult=TRUE, threshold="atr.atrStopThresh"
+                        tmult=TRUE, threshold="atr.atrStopThresh",TxnFees = 'pctFee'
          ),
          type='chain', parent = "EnterLONG",
          label='StopLONG',enabled = FALSE
@@ -182,7 +189,7 @@ add.rule(strategy=strat,
          name='ruleSignal',
          arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
-                        tmult=TRUE, threshold="atr.atrStopThresh"
+                        tmult=TRUE, threshold="atr.atrStopThresh",TxnFees = 'pctFee'
          ),
          type='chain', parent = "EnterSHORT",
          label='StopSHORT',enabled = FALSE
@@ -210,7 +217,7 @@ updateEndEq(account.st)
 # Plot the charts fo each symbol
 for (sym in symbol){
   chart.Posn(Portfolio = portfolio.st, Symbol = sym, 
-             TA=list("add_SMA(n=140)","add_SMA(n=260)"),
+             TA=list("add_SMA(n=70)","add_SMA(n=50)"),
              Dates = "2006-01::2017-04") # Chart the position 
 }
 stats <- tradeStats(portfolio.st)
@@ -225,4 +232,4 @@ colnames(returns) <- c("DMA","SP500")
 chart.CumReturns(returns,colorset=c(2,4),legend.loc="topleft",
                  main="Moving Average Crossover to Benchmark Comparison",ylab="cum return",xlab="",
                  minor.ticks=FALSE)
-Sys.setenv(TZ=ttz)                                             # Return to original time zone
+Sys.setenv(TZ=ttz)                                             # Return to original time z

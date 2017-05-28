@@ -1,33 +1,36 @@
-# Template for Strategy Development - SP500 testing
+# This strategy uses a simple moving average crossover (MAfast and MASlow), to either a) go long if the fast
+# moving avergae is above the slow moving average or b) short if the fast moving average is below the slow 
+# moving average. Has a rebalancing rule that enables us to compare being 100% invested in this strategy to 
+# buy and hold. No leverage. Here the simple percentage multiple stop loss is replace with an ATR based stop
+# loss, which is implemented via a custom indicator. Single equity data from yahoo. ATR variable stop loss
+# Optimization of all 3 strategy variables with paramsets is working. parallel proc working in linux with doMC
+# Transaction fees incorporated via a percentage based function
 
 # Library and time zone setup
 library(quantstrat)       # Required package for strategy back testing
 library(doMC)             # For parrallel optimization
-#library(rgl)             # Library to load 3D trade graphs
-library(reshape2)         # Library to load 3D trade graphs
+#library(rgl)              # Library to load 3D trade graphs
+#library(reshape2)         # Library to load 3D trade graphs
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
 # Quantstrat general variables
-strat        <- "DMA"           # Give the stratgey a name variable
-portfolio.st <- "portf"         # Portfolio name
-account.st   <- "accnt"         # Account name
-initEq       <- 100000          # this parameter is required to get pct equity rebalancing to work
-csvDir       <- "/home/rjk/Financial/commodities_data" # Directory containing csv files
-xtsDates     <- "2006/"        # Variable for the point in time you want your prices series to line up from
+strat        <- "DMA"               # Give the stratgey a name variable
+portfolio.st <- "portf"             # Portfolio name
+account.st   <- "accnt"             # Account name
+initEq       <- 10000             # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
-MAfast  <- seq(20, 100, by = 10)        #fast moving average period
-MAslow  <- seq(20, 150, by = 10)        #slow moving average period
-atrMult <- seq(1, 10, by = 1)           #atr multiple to use
-riskpct <- 0.01
+MAfast  <- seq(20, 100, by = 10)        # fast moving average period
+MAslow  <- seq(20, 100, by = 10)        # slow moving average period
+atrMult <- seq(1, 5, by = 1)            # atr multiple to use
+riskpct <- 0.02                         # amount of account to risk   
 
 # Strategy Functions
-
 # Custom indicator to generate the threshold multiplier to set an ATR based stop.
 atrStopThresh <- function(HLC, n=14, atr_mult=2){
   ATR <- ATR(HLC = HLC, n)
-  pctATR <- round((atr_mult*ATR$atr)/Cl(HLC),digits=5)
+  pctATR <- (atr_mult*ATR$atr)/Cl(HLC)
   pctATR
 }
 
@@ -40,7 +43,6 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
   }else{
     sign <- 1
   }
-  
   # get account equity
   updatePortf(Portfolio = portfolio)
   updateAcct(name = acct)
@@ -57,46 +59,33 @@ osATRsize <- function(data = mktdata, timestamp=timestamp, orderqty = orderqty, 
 
 # Transaction Fee Function - Returns a numeric Fee which is a percetage multiple of the tranaction total value 
 pctFee <- function(TxnQty,TxnPrice,Symbol){
-  feeMult <- 0.005
+  feeMult <- 0.0005
   fee <- round(-1*(feeMult*abs(TxnPrice)*abs(TxnQty)),0)
   return(fee)
 }
 
-#Symbol Setup
-# set the instument as a future and get the data from the csv file
-# Setup the Environment
-currency('USD')                                                                    # set USD as a base currency
-symbol <- c("LSU","RR","CO","NG","OJ","LB","HG",
-            "LC","CT","CC","KC","WTI","XAU")   # Universe selection
+# Symbols etc
+currency('USD')             # set USD as a base currency
+symbol <- "GSPC"            # Universe selection At this stage is only one symbol
 
-for (sym in symbol){
-  future(sym, currency = "USD", multiplier = 1)
-}
-
-getSymbols(Symbols = symbol, verbose = TRUE, warnings = TRUE, 
-           src = 'csv', dir= csvDir, extension='csv', header = TRUE, 
-           stingsAsFactors = FALSE)
-
-for (sym in symbol){
-  no_dup <- to.daily(get(sym), indexAt='days',drop.time = TRUE) # this is required to remove duplicate data
-  assign(sym, no_dup[xtsDates])                                 # Here the data is subsetted to allign it so that rebalancing works
-}
+# set the instument as a future and get the data from yahoo
+stock(symbol, currency = "USD", multiplier = 1)
+getSymbols("^GSPC", from = '1995-01-01')
+GSPC <- na.fill(GSPC,fill='extend')
 
 # if run previously, run this code from here down
 rm.strat(portfolio.st, silent = FALSE)
 rm.strat(account.st, silent = FALSE)
-delete.paramset(strategy = strat,"DMA_OPT")
+delete.paramset(strategy = strat, "DMA_OPT")
 
 # initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
 initPortf(portfolio.st, symbols = symbol, initDate = "1995-01-01")
 initAcct(account.st, portfolios = portfolio.st, initEq = initEq, initDate = "1995-01-01")
 initOrders(portfolio = portfolio.st, initDate = "1995-01-01")
 
-# define the strategy with a position limit to prevent multiple trades in a direction
-for (sym in symbol){
-  addPosLimit(portfolio = portfolio.st, sym, timestamp="2000-01-01", maxpos=100, 
-              longlevels = 1, minpos=-100, shortlevels = 1)
-}
+# Add a position limit for the portfolio to prevent multiple trades in a direction
+addPosLimit(portfolio = portfolio.st, symbol, timestamp="1995-01-01", maxpos=100, 
+            longlevels = 1, minpos=-100, shortlevels = 1)
 
 # Define Strategy
 strategy(strat, store = TRUE)
@@ -111,18 +100,18 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
 )
 
 add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
-                                                                     n = 20, atr_mult=atrMult), label = "atrStopThresh"
+                                                                     n = 14, atr_mult=atrMult), label = "atrStopThresh"
 )
 
 # Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.
 add.signal(strategy=strat,name='sigCrossover', arguments = list(columns=c("nFast", "nSlow"),relationship="gt"
-),
-label='long'
+             ),
+           label='long'
 )
 
 add.signal(strategy=strat,name='sigCrossover',arguments = list(columns=c("nFast", "nSlow"),relationship="lte"
-),
-label='short'
+             ),
+           label='short'
 )
 
 # Add the rules
@@ -214,38 +203,40 @@ registerDoMC(cores=detectCores())
 
 # Now apply the parameter sets for optimization
 out <- apply.paramset(strat, paramset.label = "DMA_OPT",
-                      portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
+                      portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE, audit = globalenv())
+
+results <- walk.forward(
+  strategy.st=strat,
+  paramset.label='DMA_OPT',
+  portfolio.st=portfolio.st,
+  account.st=account.st,
+  period='years',
+  k.training=10,
+  k.testing=1,
+  nsamples=0,
+  obj.args = list(x = quote(tradeStats.list$Profit.To.Max.Draw)),
+  audit.prefix='wfa',
+  anchored=FALSE,
+  verbose=TRUE
+  )
 
 stats <- out$tradeStats
 
-out <- write.csv(stats,             # write to file
-                 file = paste(getwd(),"/DMAopt",as.character(Sys.Date()),".csv", sep=""),
-                 quote = FALSE, row.names = TRUE)
-
-# If you've done this on a  previous date
-date <- "2017-04-01"
-stats <- read.csv(paste(getwd(),"/DMAopt",date,".csv", sep=""))
-stats <- stats[,-1]
-
-portfolio_avg <- aggregate(stats[,c(1,2,3,6:33)],list(stats$Portfolio), mean)
-
 # A loop to investigate the parameters via a 3D graph
-for (sym in symbol){
-  dfName <- paste(sym,"stats", sep = "")
-  statSubsetDf <- subset(stats, Symbol == sym)
+for (a in atrMult){
+  dfName <- paste(a,"stats", sep = "")
+  statSubsetDf <- subset(stats, atr == a)
   assign(dfName, statSubsetDf)
   tradeGraphs(stats = statSubsetDf, 
               free.params=c("ma_fast","ma_slow"),
-              statistics = c("Ann.Sharpe","Profit.To.Max.Draw","Min.Equity"), 
-              title = sym)
+              statistics = c("Ann.Sharpe","Profit.To.Max.Draw"), 
+              title = a)
 }
 
 # Or use a heatmap to look at one parameter at a time
-
-
-for (Atr in atrMult){
-  dfName <- paste(Atr,"stats", sep = "")
-  statSubsetDf <- subset(portfolio_avg, atr == Atr)
+for (a in atrMult){
+  dfName <- paste(a,"stats", sep = "")
+  statSubsetDf <- subset(stats, atr == a)
   assign(dfName, statSubsetDf)
   z <- tapply(X=statSubsetDf$Net.Trading.PL, 
               INDEX = list(statSubsetDf$ma_fast,statSubsetDf$ma_slow), 
@@ -253,9 +244,7 @@ for (Atr in atrMult){
   x <- as.numeric(rownames(z))
   y <- as.numeric(colnames(z))
   filled.contour(x=x,y=y,z=z,color=heat.colors,xlab="ma_fast",ylab="ma_slow")
-  title(Atr)
+  title(a)
 }
-
-portfolio_avg <- aggregate(stats[,c(1,2,3,6:33)],list(stats$Portfolio), mean)
 
 Sys.setenv(TZ=ttz)                                             # Return to original time zone
