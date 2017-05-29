@@ -1,5 +1,18 @@
 # Chart to analyse walk.forward() custom
-
+chartForwardTraining <- function(audit.filename)
+{
+  .audit <- NULL  # keep codetools happy
+  # # ensure correct file written by walk.forward() is provided
+  # datePattern <- "[[:digit:]]{4}.[[:digit:]]{2}.[[:digit:]]{2}(.[[:digit:]]{2}.[[:digit:]]{2}.[[:digit:]]{2})?"
+  # if (!grepl(paste0(datePattern, "\\.", datePattern, "\\.RData$"), audit.filename[1L])) {
+  #     stop("'audit.filename' should match pattern:\n  [audit.prefix].[symbol].[start timestamp].[end timestamp].RData.")
+  # }
+  if (file.exists(audit.filename)) {
+    load(audit.filename)
+  } else {
+    stop("'audit.filename', ", audit.filename, " not found.")
+  }
+  
 
   .audit <- NULL  # keep codetools happy
   
@@ -47,3 +60,4 @@
   p <- lines(Drawdowns.xts, col="grey", on=NA, main="Drawdowns")
   p <- lines(Drawdowns.xts [,n+1],col="blue",on=2)
   print(p)
+}

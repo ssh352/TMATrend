@@ -1,5 +1,18 @@
 #' Chart to analyse walk.forward() objective function custom
 
+chartFor <- function(audit.filename)
+{
+  .audit <- NULL  # keep codetools happy
+  # # ensure correct file written by walk.forward() is provided
+  # if (!grepl("\\.results\\.RData$", audit.filename[1L])) {
+  #     stop("'audit.filename' should match pattern:\n  [audit.prefix].results.RData")
+  # }
+  if (file.exists(audit.filename)) {
+    load(audit.filename)
+  } else {
+    stop("'audit.filename', ", audit.filename, " not found.")
+  }
+
   .audit <- NULL  # keep codetools happy
   
   # extract all portfolio names from the audit environment,
@@ -43,3 +56,4 @@
   p <- lines(Drawdowns.xts, col="grey", on=NA, main="Drawdowns")
   p <- lines(Drawdowns.xts [,n+1],col="blue",on=2)
   print(p)
+}
