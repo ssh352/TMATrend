@@ -211,7 +211,7 @@ out <- apply.paramset(strat, paramset.label = "DMA_OPT",
 stats <- out$tradeStats
 
 out <- write.csv(stats,             # write to file
-                 file = paste(getwd(),"/DMACurrOpt",as.character(Sys.Date()),".csv", sep=""),
+                 file = paste(getwd(),"/DMAOpt",as.character(Sys.Date()),".csv", sep=""),
                  quote = FALSE, row.names = TRUE)
 
 # If you've done this on a  previous date

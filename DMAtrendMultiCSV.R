@@ -15,13 +15,13 @@ portfolio.st <- "portf"         # Portfolio name
 account.st   <- "accnt"         # Account name
 initEq       <- 100000          # this parameter is required to get pct equity rebalancing to work
 csvDir       <- "/home/rjk/Financial/commodities_data/daily2006" # Directory containing csv files
-xtsDates     <- "2006/"        # Variable for the point in time you want your prices series to line up from
+xtsDates     <- "2011-01-01/2012-12-31"        # Variable for the point in time you want your prices series to line up from
 
 # Strategy specific variables
-MAfast  <- 50
-MAslow  <- 70
-atrMult <- 3
-riskpct <- 0.01
+MAfast  <- 40
+MAslow  <- 80
+atrMult <- 10
+riskpct <- 0.02
 
 # Strategy Functions
 # A function to set the risk for rebalancing based on the number of symbols. Overly long use length instead
@@ -76,8 +76,8 @@ pctFee <- function(TxnQty,TxnPrice,Symbol){
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
 currency('USD')                                         # set USD as a base currency
-symbol <- "CC"#c("LSU","RR","CO","NG","OJ","LB","HG",
-            #"LC","CT","KC","CC","WTI", "XAU")   # Universe selection
+symbol <- c("LSU","RR","CO","NG","OJ","LB","HG",
+            "LC","CT","KC","CC","WTI", "XAU")   # Universe selection
 risk <- setRisk(symbol)                                 # set the risk for rebalancing using the function
 
 for (sym in symbol){
@@ -225,7 +225,7 @@ stats <- tradeStats(portfolio.st)
 #plot the returns vs buy and hold
 eq1 <- getAccount(account.st)$summary$End.Eq
 rt1 <- Return.calculate(eq1,"log")
-getSymbols("^GSPC", from = '1995-01-01')
+getSymbols("^GSPC", from = '2012-01-01')
 rt2 <- periodReturn(GSPC, period = "daily")
 returns <- cbind(rt1,rt2)
 colnames(returns) <- c("DMA","SP500")

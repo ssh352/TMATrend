@@ -4,7 +4,7 @@
 library(quantstrat)       # Required package for strategy back testing
 library(doMC)             # For parrallel optimization
 #library(rgl)             # Library to load 3D trade graphs
-library(reshape2)         # Library to load 3D trade graphs
+#library(reshape2)         # Library to load 3D trade graphs
 ttz<-Sys.getenv('TZ')     # Time zone to UTC, saving original time zone
 Sys.setenv(TZ='UTC')
 
@@ -73,6 +73,9 @@ future(symbol, currency = "USD", multiplier = 1)
 getSymbols(Symbols = symbol, verbose = TRUE, warnings = TRUE, 
            src = 'csv', dir= csvDir, extension='csv', header = TRUE, 
            stingsAsFactors = FALSE)
+
+# Subset
+# CC <- CC['2006-01-03/2010-12-31']
 
 for (sym in symbol){
   no_dup <- to.daily(get(sym), indexAt='days',drop.time = TRUE) # this is required to remove duplicate data
