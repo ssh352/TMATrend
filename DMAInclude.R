@@ -84,9 +84,6 @@ chartForwardTraining <- function(audit.filename)
     stop("'audit.filename', ", audit.filename, " not found.")
   }
   
-  
-  .audit <- NULL  # keep codetools happy
-  
   # extract all portfolio names from the audit environment
   # NB: training data only has portfolios that end in digits
   portfolios.st = ls(name=.audit, pattern='portfolio.*')
@@ -147,8 +144,6 @@ chartFor <- function(audit.filename)
   } else {
     stop("'audit.filename', ", audit.filename, " not found.")
   }
-  
-  .audit <- NULL  # keep codetools happy
   
   # extract all portfolio names from the audit environment,
   # except result portfolio (which doesn't end with a digit)
