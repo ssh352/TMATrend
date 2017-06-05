@@ -6,7 +6,7 @@ Sys.setenv(TZ='UTC')
 strat        <- "DMA"           # Give the stratgey a name variable
 portfolio.st <- "portf"         # Portfolio name
 account.st   <- "accnt"         # Account name
-initEq       <- 100000          # this parameter is required to get pct equity rebalancing to work
+initEq       <- 1000000          # this parameter is required to get pct equity rebalancing to work
 
 # Strategy specific variables
 MAfast  <- 40   # fast moving average period

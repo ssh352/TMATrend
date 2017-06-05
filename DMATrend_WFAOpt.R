@@ -22,12 +22,15 @@ MAslowPset  <- seq(20, 100, by = 10)        # slow moving average period for par
 atrMultPset <- seq(1, 10, by = 1)           # atr multiple to use for paramset
 
 # Get all symbols, uncomment what you need
- source(paste(getwd(),"/GetCommData.R",sep=""))
+source(paste(getwd(),"/GetCommData.R",sep=""))
 # source(paste(getwd(),"/GetCurrData.R",sep=""))
 # source(paste(getwd(),"/GetEqData.R",sep=""))
 
 # Change symbol variable here if needed
  symbol <- "CC"
+ 
+# Change the dates if you need WFA to run without error
+ assign(symbol,get(symbol)['/2016'])
 
 # If run previously, run this code from here down
 rm.strat(portfolio.st, silent = FALSE)
@@ -56,7 +59,7 @@ registerDoMC(cores=detectCores())
 results <- walk.forward(strategy.st=strat, paramset.label='DMA_OPT', portfolio.st=portfolio.st,
                         account.st=account.st, period='years', k.training=5, k.testing=1,
                         nsamples=0, obj.args = list(x = quote(tradeStats.list$Profit.To.Max.Draw)),
-                        audit.prefix='wfa', anchored=FALSE, verbose=TRUE
+                        audit.prefix='wfa2', anchored=TRUE, verbose=FALSE
                         )
 
 # Update the portfolio
