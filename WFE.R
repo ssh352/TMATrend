@@ -8,15 +8,16 @@ startYear      <- "2006"
 endYear        <- "2016"
 trainingLength <- 5
 testingLength  <- 1
-anchored       <- FALSE
-prefix         <- "wfa."
-dataDir        <- ""
+anchored       <- TRUE 
+prefix         <- "wfa.p2danc."
+symbol         <- "XAU"
+setwd(paste("S:/strat/DMA/wfa/",symbol,sep = "")) 
 
 # Generate year numerics
 numStartYear <- as.numeric(startYear)
 numEndYear <- as.numeric(endYear)
 firstTest <-numStartYear+trainingLength
-numTests <- numEndYear-firstTest
+numTests <- ((numEndYear-firstTest)+1)/testingLength
 testYears <- seq(firstTest,numEndYear,by=testingLength)
 
 # Get Testing Returns for each Period
@@ -29,29 +30,35 @@ summary1 <- getPortfolio(Portfolio = "portfolio.portf", envir = .audit)$summary
 
 # Get Returns for each testing year
 for(year in testYears){
-yearsumm <- summary1[as.character(year)]
-name <- paste("PL",year,sep = "")
-assign(name,sum(yearsumm[,"Net.Trading.PL"]))
+  yearsumm <- summary1[as.character(year)]
+  name <- paste("PL",year,sep = "")
+  assign(name,sum(yearsumm[,"Net.Trading.PL"]))
 }
 
-if (anchored=TRUE){
-  startTestDates <- numStartYear
+# Set the start date of tests for anchored vs non-anchored
+if (anchored==TRUE){
+  startTrainDates <- rep(numStartYear,numTests)
 } else{
-  startTestDates <- seq(numStartYear,numStartYear+numTests,by=testingLength)
+  startTrainDates <- seq(numStartYear,(numStartYear+numTests)-1,by=testingLength)
 }
 
-.audit <- NULL
-chosen.one <- .audit$param.combo.nr[1L]
-chosen.portfolio.st = ls(name=.audit, 
-                         pattern=glob2rx
-                         (paste('portfolio', '*', chosen.one, sep='.')))
-trainingport <- getPortfolio(chosen.portfolio.st,env = .audit)
-trainingSumm <- trainingport$summary["2011/2015"]
-PLTrainAnn <- (sum(trainingSumm[,"Net.Trading.PL"]))/5
-WFE2011 <- PL2011/PLTrainAnn
-WFE2012 <- PL2012/PLTrainAnn
-WFE2013 <- PL2013/PLTrainAnn
-WFE2014 <- PL2014/PLTrainAnn
-WFE2015 <- PL2015/PLTrainAnn
-WFE2016 <- PL2016/PLTrainAnn
-WFETotal <- mean(c(WFE2011,WFE2012,WFE2013,WFE2014,WFE2015,WFE2016))
+n <- 1
+sumWFE <- 0
+while(n <= numTests){
+  .audit = NULL
+  load(list.files(pattern=glob2rx(paste(prefix,symbol,".",startTrainDates[n],"*",firstTest+(n-2),"*.RData",sep=""))))
+  chosen.one <- .audit$param.combo.nr[1L]
+  chosen.portfolio.st = ls(name=.audit, 
+                           pattern=glob2rx
+                           (paste('portfolio', '*', chosen.one, sep='.')))
+  trainingport <- getPortfolio(chosen.portfolio.st,env = .audit)
+  trainingSumm <- trainingport$summary[paste(startTrainDates[n],"/",firstTest+(n-2),sep="")]
+  PLTrainAnn <- (sum(trainingSumm[,"Net.Trading.PL"]))/((firstTest+(n-1))-startTrainDates[n])
+  wfe <- get(paste("PL",firstTest+(n-1),sep=""))/PLTrainAnn
+  sumWFE <- sumWFE + wfe
+  assign(paste("WFE",firstTest+(n-1),sep=""),wfe)
+  n <- n+1 # n + testing length(?)
+}
+
+WFETotal <- sumWFE/numTests
+print(WFETotal)

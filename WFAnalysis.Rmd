@@ -1,5 +1,5 @@
 ---
-title: "WFA_Analysis Gold (XAU)"
+title: "WFA_Analysis USDCHF"
 author: "RJ Kumar"
 date: "03/06/2017"
 output:
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Walk Forward Report
 
-This markdown document will generate a wlak forward analysis report for a symbol, it will test optimization via net trading PL and the ratio of profit to maximum draw down.
+This markdown document will generate a walk forward analysis report for a symbol, it will test optimization via net trading PL and the ratio of profit to maximum draw down.
 
 ```{r strategy setup, message=FALSE, warning=FALSE, include=FALSE}
 # Load Quantstrat and required packages
@@ -35,19 +35,25 @@ MAfastPset  <- seq(20, 100, by = 10)        # fast moving average period for par
 MAslowPset  <- seq(20, 100, by = 10)        # slow moving average period for paramset
 atrMultPset <- seq(1, 10, by = 1)           # atr multiple to use for paramset
 
-# Get all symbols, uncomment what you need
- source(paste(getwd(),"/GetCommData.R",sep=""))
-# source(paste(getwd(),"/GetCurrData.R",sep=""))
-# source(paste(getwd(),"/GetEqData.R",sep=""))
+# StartDate, Training and Testing Lengths in Years
+startDate <- "2000" # You must edit the getCurrData file to match this
+trainingLength <- 5
+testingLength <- 1
 
-# Change symbol variable here if needed
- symbol <- "XAU"
+ # Get all symbols, uncomment what you need
+ # source(paste(getwd(),"/GetCommData.R",sep=""))
+ source(paste(getwd(),"/GetCurrData.R",sep=""))
+ # source(paste(getwd(),"/GetEqData.R",sep=""))
 
-# Change the dates if you need WFA to run without error
- assign(symbol,get(symbol)['/2016'])
+ # Change symbol variable here if needed
+ symbol <- "USDCHF"
+
+ # Change the end dates if you need to so WFA runs without error
+ endDate <- "2016"
+ assign(symbol,get(symbol)[paste('/',endDate,sep = "")])
  
-# Register the cores for parralel procssing
-registerDoMC(cores=detectCores())
+ # Register the cores for parralel procssing
+ registerDoMC(cores=detectCores())
 ```
 
 ## Floating Analysis Window
@@ -78,12 +84,13 @@ enable.rule(strat,type = "chain",label = "StopSHORT")
 registerDoMC(cores=detectCores())
 
 # Now apply the walk forward analysis over the parameter sets for optimization
-results <- walk.forward(strategy.st=strat, paramset.label='DMA_OPT', 
-                        portfolio.st=portfolio.st,
-                        account.st=account.st, period='years', k.training=5,
-                        k.testing=1, nsamples=0, 
+results <- walk.forward(strategy.st = strat, paramset.label = 'DMA_OPT', 
+                        portfolio.st = portfolio.st,
+                        account.st = account.st, period = 'years',
+                        k.training = trainingLength,
+                        k.testing = testingLength, nsamples = 0, 
                         obj.args = list(x = quote(tradeStats.list$Net.Trading.PL)),
-                        audit.prefix='wfa', anchored=FALSE, verbose=FALSE
+                        audit.prefix = 'wfa', anchored=FALSE, verbose=FALSE
                         )
 
 # Update the portfolio
@@ -98,12 +105,16 @@ chart.Posn(Portfolio = portfolio.st, Symbol = symbol)          # Chart the posit
 ### Analysis Charts: Max Trading PL
 
 ```{r PL float graphs, echo=FALSE, message=FALSE, warning=FALSE}
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.",symbol,".2006*.2010*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.",symbol,".2007*.2011*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.",symbol,".2008*.2012*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.",symbol,".2009*.2013*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.",symbol,".2010*.2014*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.",symbol,".2011*.2015*.RData", sep = ""))))
+# Code to chart the training periods and combined testing portfolio
+n <- 1 # Set a counter
+
+# Loop to print training perods, file names calculated from inputs 
+while(n <= as.numeric(endDate)-(as.numeric(startDate)+trainingLength-1)){
+  chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.",symbol,".",as.numeric(startDate)+(n-1), "*", (as.numeric(startDate) + trainingLength) + (n - 2), "*.RData", sep = ""))))
+  n <- n + testingLength
+}
+
+# Chart Testing Data
 chartFor("wfa.results.RData")
 ```
 
@@ -135,7 +146,7 @@ registerDoMC(cores=detectCores())
 
 # Now apply the walk forward analysis over the parameter sets for optimization
 results <- walk.forward(strategy.st=strat, paramset.label='DMA_OPT', portfolio.st=portfolio.st,
-                        account.st=account.st, period='years', k.training=5, k.testing=1,
+                        account.st=account.st, period='years', k.training=trainingLength, k.testing=testingLength,
                         nsamples=0, obj.args = list(x = quote(tradeStats.list$Profit.To.Max.Draw)),
                         audit.prefix='wfa.p2d', anchored=FALSE, verbose=FALSE
                         )
@@ -152,12 +163,16 @@ chart.Posn(Portfolio = portfolio.st, Symbol = symbol)          # Chart the posit
 ### Analysis Charts: Maximum Ratio of Profit to Maximum Drawdown
 
 ```{r profit to draw floating graphs, echo=FALSE, message=FALSE, warning=FALSE}
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2d.",symbol,".2006*.2010*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2d.",symbol,".2007*.2011*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2d.",symbol,".2008*.2012*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2d.",symbol,".2009*.2013*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2d.",symbol,".2010*.2014*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2d.",symbol,".2011*.2015*.RData", sep = ""))))
+# Code to chart the training periods and combined testing portfolio
+n <- 1 # Set a counter
+
+# Loop to print training perods, file names calculated from inputs 
+while(n <= as.numeric(endDate)-(as.numeric(startDate)+trainingLength-1)){
+  chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2d.",symbol,".",as.numeric(startDate)+(n-1), "*", (as.numeric(startDate) + trainingLength) + (n - 2), "*.RData", sep = ""))))
+  n <- n + testingLength
+}
+
+# Chart Testing Data
 chartFor("wfa.p2d.results.RData")
 ```
 
@@ -191,8 +206,8 @@ registerDoMC(cores=detectCores())
 # Now apply the walk forward analysis over the parameter sets for optimization
 results <- walk.forward(strategy.st=strat, paramset.label='DMA_OPT', 
                         portfolio.st=portfolio.st,
-                        account.st=account.st, period='years', k.training=5,
-                        k.testing=1, nsamples=0, 
+                        account.st=account.st, period='years', k.training=trainingLength,
+                        k.testing=testingLength, nsamples=0, 
                         obj.args = list(x = quote(tradeStats.list$Net.Trading.PL)),
                         audit.prefix='wfa.anc', anchored=TRUE, verbose=FALSE
                         )
@@ -209,12 +224,16 @@ chart.Posn(Portfolio = portfolio.st, Symbol = symbol)          # Chart the posit
 ### Analysis Charts: Max Trading PL
 
 ```{r PL anchored graphs, echo=FALSE, message=FALSE, warning=FALSE}
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.anc.",symbol,".2006*.2010*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.anc.",symbol,".2006*.2011*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.anc.",symbol,".2006*.2012*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.anc.",symbol,".2006*.2013*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.anc.",symbol,".2006*.2014*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.anc.",symbol,".2006*.2015*.RData", sep = ""))))
+# Code to chart the training periods and combined testing portfolio
+n <- 1 # Set a counter
+
+# Loop to print training perods, file names calculated from inputs 
+while(n <= as.numeric(endDate)-(as.numeric(startDate)+trainingLength-1)){
+  chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.anc.",symbol,".",as.numeric(startDate), "*", (as.numeric(startDate) + trainingLength) + (n - 2), "*.RData", sep = ""))))
+  n <- n + testingLength
+}
+
+# Chart Testing Data
 chartFor("wfa.anc.results.RData")
 ```
 
@@ -246,7 +265,7 @@ registerDoMC(cores=detectCores())
 
 # Now apply the walk forward analysis over the parameter sets for optimization
 results <- walk.forward(strategy.st=strat, paramset.label='DMA_OPT', portfolio.st=portfolio.st,
-                        account.st=account.st, period='years', k.training=5, k.testing=1,
+                        account.st=account.st, period='years', k.training=trainingLength, k.testing=testingLength,
                         nsamples=0, obj.args = list(x = quote(tradeStats.list$Profit.To.Max.Draw)),
                         audit.prefix='wfa.p2danc', anchored=TRUE, verbose=FALSE
                         )
@@ -263,11 +282,15 @@ chart.Posn(Portfolio = portfolio.st, Symbol = symbol)          # Chart the posit
 ### Analysis Charts: Maximum Ratio of Profit to Maximum Drawdown
 
 ```{r profit to draw anchored graphs, echo=FALSE, message=FALSE, warning=FALSE}
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2danc.",symbol,".2006*.2010*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2danc.",symbol,".2006*.2011*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2danc.",symbol,".2006*.2012*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2danc.",symbol,".2006*.2013*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2danc.",symbol,".2006*.2014*.RData", sep = ""))))
-chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2danc.",symbol,".2006*.2015*.RData", sep = ""))))
+# Code to chart the training periods and combined testing portfolio
+n <- 1 # Set a counter
+
+# Loop to print training perods, file names calculated from inputs 
+while(n <= as.numeric(endDate)-(as.numeric(startDate)+trainingLength-1)){
+  chartForwardTraining(list.files(pattern=glob2rx(paste("wfa.p2danc.",symbol,".",as.numeric(startDate), "*", (as.numeric(startDate) + trainingLength) + (n - 2), "*.RData", sep = ""))))
+  n <- n + testingLength
+}
+
+# Chart Testing Data
 chartFor("wfa.p2danc.results.RData")
 ```
