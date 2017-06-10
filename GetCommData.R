@@ -8,7 +8,7 @@ Sys.setenv(TZ="UTC")
 # set the instument as a future and get the data from the csv file
 # Setup the Environment
 csvDir       <- "/home/rjk/Financial/commodities_data/daily2006" # Directory containing csv files
-xtsDates     <- "2006/"        # Variable for the point in time you want your prices series to line up from
+xtsDates     <- "2012/"        # Variable for the point in time you want your prices series to line up from
 currency('USD')     # set USD as a base currency
 
 symbol <- c("LSU","RR","CO","NG","OJ","LB","HG",

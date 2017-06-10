@@ -15,7 +15,7 @@ stats. In this case it is the data for a dual moving average crossover trend fol
 
 ```{r}
 date <- "2017-05-23"
-stats <- read.csv(paste(getwd(),"/DMAopt",date,".csv", sep=""))
+stats <- read.csv(paste("/media/sjaoraid/strat/DMA/opt/DMAopt",date,".csv", sep=""))
 stats <- stats[,-1]
 symbols <- as.character(unique(stats$Symbol))
 library(ggplot2)
