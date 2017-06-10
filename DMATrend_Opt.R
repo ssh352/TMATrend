@@ -23,8 +23,8 @@ atrMultPset <- seq(2, 10, by = 1)           # atr multiple to use for paramset
 
 # Get all symbols, uncomment what you need
 # source(paste(getwd(),"/GetCommData.R",sep=""))
-# source(paste(getwd(),"/GetCurrData.R",sep=""))
- source(paste(getwd(),"/GetEqData.R",sep=""))
+ source(paste(getwd(),"/GetCurrData.R",sep=""))
+# source(paste(getwd(),"/GetEqData.R",sep=""))
 
 # Change symbol variable here if needed
 # symbol <- ""
@@ -60,5 +60,5 @@ stats <- out$tradeStats
 
 # Write to csv file for later analysis
 out <- write.csv(stats,             
-                 file = paste("media/sjaoraid/strat/DMA/DMAopt",as.character(Sys.Date()),".csv", sep=""),
+                 file = paste("/media/sjaoraid/strat/DMA/opt/DMACurrOpt",as.character(Sys.Date()),".csv", sep=""),
                  quote = FALSE, row.names = TRUE)
