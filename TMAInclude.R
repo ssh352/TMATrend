@@ -1,9 +1,9 @@
-# This is the include file for Dual Moving Avergae Crossover Function
+# This is the include file for Triple Moving Avergae Crossover Function
 
 Sys.setenv(TZ='UTC')
 
 # Quantstrat general variables
-strat        <- "DMA"           # Give the stratgey a name variable
+strat        <- "TMA"           # Give the stratgey a name variable
 portfolio.st <- "portf"         # Portfolio name
 account.st   <- "accnt"         # Account name
 initEq       <- 1000000          # this parameter is required to get pct equity rebalancing to work
@@ -11,6 +11,7 @@ initEq       <- 1000000          # this parameter is required to get pct equity 
 # Strategy specific variables
 MAfast  <- 40   # fast moving average period
 MAslow  <- 80   # slow moving average period
+MAmed   <- 60   # medium moving average period
 atrMult <- 10   # atr multiple for stop loss and order sizing
 riskpct <- 0.02 # percentage of equity to risk
 risk <- 1
@@ -18,6 +19,7 @@ risk <- 1
 # Paramset Variables
 MAfastPset  <- seq(20, 100, by = 10)        # fast moving average period for paramset
 MAslowPset  <- seq(40, 100, by = 10)        # slow moving average period for paramset
+MAmedPset  <- seq(40, 100, by = 10)        # slow moving average period for paramset
 atrMultPset <- seq(2, 10, by = 1)           # atr multiple to use for paramset
 
 # Strategy Functions
