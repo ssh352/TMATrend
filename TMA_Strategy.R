@@ -3,12 +3,12 @@
 library(quantstrat)       # Required package for strategy back testing
 library(doMC)
 
-source(paste(getwd(),"/DMAInclude.R",sep=""))
+source(paste(getwd(),"/TMAInclude.R",sep=""))
 
 # Define Strategy
 strategy(strat, store = TRUE)
 
-# Add the indicators - A fast moving average, a slow moving average and the custom indicator
+# Add the indicators - A fast moving average (MA), a slow MA, a medium MA and the custom indicator
 add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,1]),
                                                            n = MAfast), label = "nFast"
 )
@@ -17,28 +17,51 @@ add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,
                                                            n = MAslow), label = "nSlow"
 )
 
+add.indicator(strategy = strat,name = "SMA",arguments=list(x=quote(Cl(mktdata)[,1]),
+                                                           n = MAmed), label = "nMed"
+)
+
 add.indicator(strategy = strat,name = "atrStopThresh",arguments=list(HLC=quote(mktdata),
                                                                      n = 20, atr_mult=atrMult), label = "atrStopThresh"
 )
 
-# Add the signals - long on a cross of fast MA over slow MA and short on a cross of fast MA below slow MA.
-add.signal(strategy=strat,name='sigCrossover', arguments = 
-             list(columns=c("nFast", "nSlow"),relationship="gt"
+# Add the signals - long on the first occurence of fastMA over medMA over slowMA and 
+# short on the first occurence of fastMA below medMA below slowMA. Exit long on fastMA 
+# below medMA or medMA below slowMA. Exit short on fastMA above MedMA or medMA above slowMA
+
+add.signal(strategy=strat,name='sigFormula', arguments = 
+             list(columns=c("SMA.nFast", "SMA.nSlow","SMA.nMed"),formula="(SMA.nFast > SMA.nMed) & (SMA.nMed > SMA.nSlow)",
+                  cross = TRUE
              ),
-           label='long'
+           label='longEntry'
 )
 
-add.signal(strategy=strat,name='sigCrossover',arguments = 
-             list(columns=c("nFast", "nSlow"),relationship="lt"
+add.signal(strategy=strat,name='sigFormula',arguments = 
+             list(columns=c("SMA.nFast", "SMA.nSlow","SMA.nMed"),formula="(SMA.nFast < SMA.nMed) & (SMA.nMed < SMA.nSlow)",
+                  cross = TRUE
              ),
-           label='short'
+           label='shortEntry'
+)
+
+add.signal(strategy=strat,name='sigFormula', arguments = 
+             list(columns=c("SMA.nFast", "SMA.nSlow","SMA.nMed"),formula="(SMA.nFast < SMA.nMed) | (SMA.nMed < SMA.nSlow)",
+                  cross = TRUE
+             ),
+           label='longExit'
+)
+
+add.signal(strategy=strat,name='sigFormula',arguments = 
+             list(columns=c("SMA.nFast", "SMA.nSlow","SMA.nMed"),formula="(SMA.nFast > SMA.nMed) | (SMA.nMed > SMA.nSlow)",
+                  cross = TRUE
+             ),
+           label='shortExit'
 )
 
 # Add the rules
-# a) Entry rules - enter on moving average cross, osMaxPos is the order function
+# a) Entry rules - enter on moving average cross, osATRsize is the order function
 add.rule(strategy=strat,
          name='ruleSignal',
-         arguments=list(sigcol='long', sigval=TRUE, orderside='long', ordertype='market', 
+         arguments=list(sigcol='longEntry', sigval=TRUE, orderside='long', ordertype='market', 
                         orderqty=+100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter',
@@ -47,7 +70,7 @@ add.rule(strategy=strat,
 
 add.rule(strategy=strat,
          name='ruleSignal',
-         arguments=list(sigcol='short', sigval=TRUE, orderside='short', ordertype='market', 
+         arguments=list(sigcol='shortEntry', sigval=TRUE, orderside='short', ordertype='market', 
                         orderqty=-100, osFUN='osATRsize', replace=FALSE
          ),
          type='enter',
@@ -56,7 +79,7 @@ add.rule(strategy=strat,
 
 # b) Exit rules - Close on cross the other way
 add.rule(strategy = strat, name='ruleSignal',
-         arguments=list(sigcol='long' , sigval=TRUE, orderside=NULL, ordertype='market',
+         arguments=list(sigcol='longExit' , sigval=TRUE, orderside=NULL, ordertype='market',
                         orderqty="all", replace=TRUE, orderset = "ocolong",TxnFees = 'pctFee'
          ),
          type='exit',
@@ -64,7 +87,7 @@ add.rule(strategy = strat, name='ruleSignal',
 )
 
 add.rule(strategy = strat, name='ruleSignal',
-         arguments=list(sigcol='short', sigval=TRUE, orderside=NULL , ordertype='market',
+         arguments=list(sigcol='shortExit', sigval=TRUE, orderside=NULL , ordertype='market',
                         orderqty="all", replace=TRUE, orderset = "ocoshort",TxnFees = 'pctFee'
          ),
          type='exit',
@@ -74,7 +97,7 @@ add.rule(strategy = strat, name='ruleSignal',
 # c) Stoploss rules using ordersets and ATR based threshold, not enabled by default
 add.rule(strategy=strat,
          name='ruleSignal',
-         arguments=list(sigcol='long', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
+         arguments=list(sigcol='longEntry', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='High', orderqty="all", replace=FALSE, orderset ="ocolong",
                         tmult=TRUE, threshold="atr.atrStopThresh",TxnFees = 'pctFee'
          ),
@@ -84,7 +107,7 @@ add.rule(strategy=strat,
 
 add.rule(strategy=strat,
          name='ruleSignal',
-         arguments=list(sigcol='short', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
+         arguments=list(sigcol='shortEntry', sigval=TRUE, orderside=NULL, ordertype='stoplimit', 
                         prefer='Low', orderqty="all", replace=FALSE, orderset ="ocoshort",
                         tmult=TRUE, threshold="atr.atrStopThresh",TxnFees = 'pctFee'
          ),
@@ -104,7 +127,7 @@ add.rule(strat, 'rulePctEquity',
 
 # Add distributions and constraints
 add.distribution(strategy = strat,
-                 paramset.label = "DMA_OPT",
+                 paramset.label = "TMA_OPT",
                  component.type = "indicator",
                  component.label = "nFast",
                  variable = list( n = MAfastPset ),
@@ -112,7 +135,7 @@ add.distribution(strategy = strat,
 )
 
 add.distribution(strategy = strat,
-                 paramset.label = "DMA_OPT",
+                 paramset.label = "TMA_OPT",
                  component.type = "indicator",
                  component.label = "nSlow",
                  variable = list( n = MAslowPset ),
@@ -120,7 +143,15 @@ add.distribution(strategy = strat,
 )
 
 add.distribution(strategy = strat,
-                 paramset.label = "DMA_OPT",
+                 paramset.label = "TMA_OPT",
+                 component.type = "indicator",
+                 component.label = "nMed",
+                 variable = list( n = MAmedPset ),
+                 label = "ma_med"
+)
+
+add.distribution(strategy = strat,
+                 paramset.label = "TMA_OPT",
                  component.type = "indicator",
                  component.label = "atrStopThresh",
                  variable = list( atr_mult=atrMultPset ),
@@ -128,9 +159,17 @@ add.distribution(strategy = strat,
 )
 
 add.distribution.constraint(strategy = strat,
-                            paramset.label = "DMA_OPT",
+                            paramset.label = "TMA_OPT",
                             distribution.label.1 = "ma_fast",
+                            distribution.label.2 = "ma_med",
+                            operator = "<",
+                            label = "fastLTmed")
+
+add.distribution.constraint(strategy = strat,
+                            paramset.label = "TMA_OPT",
+                            distribution.label.1 = "ma_med",
                             distribution.label.2 = "ma_slow",
                             operator = "<",
-                            label = "fastLTslow")
+                            label = "medLTslow")
+
 save.strategy(strat)

@@ -10,21 +10,22 @@ require(doMC)
 Sys.setenv(TZ="UTC")
 
 # Get DMA include ile with parameters and Functions
-source(paste(getwd(),"/DMAInclude.R",sep=""))
+source(paste(getwd(),"/TMAInclude.R",sep=""))
 
 # Strategy specific variables
 riskpct <- 0.02 # percentage of equity to risk 
 risk    <- 1
 
 # Paramset Variables
-MAfastPset  <- seq(20, 100, by = 10)        # fast moving average period for paramset
-MAslowPset  <- seq(40, 100, by = 10)        # slow moving average period for paramset
+MAfastPset  <- seq(50, 400, by = 50)        # fast moving average period for paramset
+MAslowPset  <- seq(50, 400, by = 50)        # slow moving average period for paramset
+MAmedPset  <- seq(50, 400, by = 50)        # slow moving average period for paramset
 atrMultPset <- seq(2, 10, by = 1)           # atr multiple to use for paramset
 
 # Get all symbols, uncomment what you need
 # source(paste(getwd(),"/GetCommData.R",sep=""))
- source(paste(getwd(),"/GetCurrData.R",sep=""))
-# source(paste(getwd(),"/GetEqData.R",sep=""))
+# source(paste(getwd(),"/GetCurrData.R",sep=""))
+ source(paste(getwd(),"/GetEqData.R",sep=""))
 
 # Change symbol variable here if needed
 # symbol <- ""
@@ -32,6 +33,7 @@ atrMultPset <- seq(2, 10, by = 1)           # atr multiple to use for paramset
 # If run previously, run this code from here down
 rm.strat(portfolio.st, silent = FALSE)
 rm.strat(account.st, silent = FALSE)
+delete.paramset(strat,"TMA_OPT")
 
 # Initialize the portfolio, account and orders. Starting equity and assuming data post 1995.
 initPortf(portfolio.st, symbols = symbol)
@@ -44,7 +46,7 @@ for (sym in symbol){
               longlevels = 1, minpos=-100, shortlevels = 1)
 }
 
-load.strategy("DMA")
+load.strategy("TMA")
 
 enable.rule(strat,type = "chain",label = "StopLONG")
 enable.rule(strat,type = "chain",label = "StopSHORT")
@@ -53,7 +55,7 @@ enable.rule(strat,type = "chain",label = "StopSHORT")
 registerDoMC(cores=detectCores())
 
 # Now apply the parameter sets for optimization
-out <- apply.paramset(strat, paramset.label = "DMA_OPT",
+out <- apply.paramset(strat, paramset.label = "TMA_OPT",
                       portfolio=portfolio.st, account = account.st, nsamples=0, verbose = TRUE)
 
 stats <- out$tradeStats
