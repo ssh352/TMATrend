@@ -4,7 +4,8 @@
 
 # Load Quantstrat and required packages
 require(quantstrat)
-require(doMC)
+#require(doMC)
+require(doParallel) #for windoze
 
 # Set the system time to UTC
 Sys.setenv(TZ="UTC")
@@ -17,9 +18,9 @@ riskpct <- 0.02 # percentage of equity to risk
 risk    <- 1
 
 # Paramset Variables
-MAfastPset  <- seq(50, 400, by = 50)        # fast moving average period for paramset
-MAslowPset  <- seq(50, 400, by = 50)        # slow moving average period for paramset
-MAmedPset  <- seq(50, 400, by = 50)        # slow moving average period for paramset
+MAfastPset  <- seq(10, 200, by = 10)        # fast moving average period for paramset
+MAslowPset  <- seq(50, 400, by = 25)        # slow moving average period for paramset
+MAmedPset  <- seq(50, 400, by = 25)        # slow moving average period for paramset
 atrMultPset <- seq(2, 10, by = 1)           # atr multiple to use for paramset
 
 # Get all symbols, uncomment what you need
@@ -209,7 +210,8 @@ enable.rule(strat,type = "chain",label = "StopLONG")
 enable.rule(strat,type = "chain",label = "StopSHORT")
 
 # Register the cores for parralel procssing
-registerDoMC(cores=detectCores())
+#registerDoMC(cores=detectCores())
+registerDoParallel(cores = detectCores()) #windoze
 
 # Now apply the parameter sets for optimization
 out <- apply.paramset(strat, paramset.label = "TMA_OPT",
