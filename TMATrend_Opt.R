@@ -18,9 +18,9 @@ riskpct <- 0.02 # percentage of equity to risk
 risk    <- 1
 
 # Paramset Variables
-MAfastPset  <- seq(20, 200, by = 20)        # fast moving average period for paramset
-MAslowPset  <- seq(50, 400, by = 50)        # slow moving average period for paramset
-MAmedPset  <- seq(50, 400, by = 50)        # slow moving average period for paramset
+MAfastPset  <- seq(10, 200, by = 10)        # fast moving average period for paramset
+MAslowPset  <- seq(50, 400, by = 25)        # slow moving average period for paramset
+MAmedPset  <- seq(50, 400, by = 25)        # slow moving average period for paramset
 atrMultPset <- seq(2, 10, by = 2)           # atr multiple to use for paramset
 
 # Get all symbols, uncomment what you need

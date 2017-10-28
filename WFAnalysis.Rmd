@@ -24,15 +24,16 @@ require(doMC)
 Sys.setenv(TZ="UTC")
 
 # Get DMA include ile with parameters and Functions
-source(paste(getwd(),"/DMAInclude.R",sep=""))
+source(paste(getwd(),"/TMAInclude.R",sep=""))
 
 # Strategy specific variables
 riskpct <- 0.02 # percentage of equity to risk 
 risk    <- 1
 
 # Paramset Variables
-MAfastPset  <- seq(20, 100, by = 10)        # fast moving average period for paramset
-MAslowPset  <- seq(20, 100, by = 10)        # slow moving average period for paramset
+MAfastPset  <- seq(10, 100, by = 10)        # fast moving average period for paramset
+MAslowPset  <- seq(50, 300, by = 50)        # slow moving average period for paramset
+MAmedPset  <- seq(30, 100, by = 10)         # slow moving average period for paramset
 atrMultPset <- seq(1, 10, by = 1)           # atr multiple to use for paramset
 
 # StartDate, Training and Testing Lengths in Years
@@ -41,12 +42,12 @@ trainingLength <- 5
 testingLength <- 1
 
  # Get all symbols, uncomment what you need
- # source(paste(getwd(),"/GetCommData.R",sep=""))
- source(paste(getwd(),"/GetCurrData.R",sep=""))
+ source(paste(getwd(),"/GetCommData.R",sep=""))
+ # source(paste(getwd(),"/GetCurrData.R",sep=""))
  # source(paste(getwd(),"/GetEqData.R",sep=""))
 
  # Change symbol variable here if needed
- symbol <- "USDCHF"
+ symbol <- "CC"
 
  # Change the end dates if you need to so WFA runs without error
  endDate <- "2016"
